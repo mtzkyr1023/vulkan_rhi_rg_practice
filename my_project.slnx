@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="mv_RendererBackendVK/mv_RendererBackendVK.vcxproj" Id="33761ed8-91e0-4b7e-8cdc-4b35de241c4a" />
+  <Project Path="mv_RendererCore/mv_RendererCore.vcxproj" Id="be42973c-83ff-4812-8d86-8ca0a127b16d" />
+  <Project Path="proj001/proj001.vcxproj" Id="bfc56906-a12c-4894-820b-d07ab444fe45" />
+</Solution>
