@@ -20,7 +20,19 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\renderer.h" />
+    <ClInclude Include="include\rhi\commandbuffer.h" />
     <ClInclude Include="include\rhi\rhi.h" />
+    <ClInclude Include="include\rhi\resource.h" />
+    <ClInclude Include="include\util\types.h" />
+    <ClInclude Include="src\rhi\commandbuffer.vulkan.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\rhi\rhi.vulkan.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\mv_RendererBackendVK\mv_RendererBackendVK.vcxproj">
+      <Project>{33761ed8-91e0-4b7e-8cdc-4b35de241c4a}</Project>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
@@ -118,6 +130,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\;$(SolutionDir)\mv_RendererBackendVK\include\;$(VULKAN_SDK)\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
