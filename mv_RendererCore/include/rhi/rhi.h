@@ -24,31 +24,6 @@ namespace mv
 
 			virtual BufferHandle createBuffer(const BufferDesc& desc) = 0;
 			virtual TextureHandle createTexture(const TextureDesc& desc) = 0;
-
-			virtual ICommandBuffer* createCommandBuffer() = 0;
-
-			virtual void submit(ICommandBuffer* commandbuffer) = 0;
-		};
-
-		class VulkanRHI : public IRHI
-		{
-		public:
-			VulkanRHI();
-			~VulkanRHI();
-
-			void initialize(void* hwnd) override;
-			void deinitialize() override;
-
-			BufferHandle createBuffer(const BufferDesc& desc) override;
-			TextureHandle createTexture(const TextureDesc& desc) override;
-
-			ICommandBuffer* createCommandBuffer() override;
-
-			void submit(ICommandBuffer* commandbuffer) override;
-
-		private:
-			struct Impl;
-			std::shared_ptr<Impl> impl_;
 		};
 	}
 }

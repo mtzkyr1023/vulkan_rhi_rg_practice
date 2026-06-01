@@ -19,10 +19,23 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\vulkan_renderer.cpp" />
+    <ClCompile Include="src\vulkan_descriptor.cpp" />
+    <ClCompile Include="src\vulkan_device.cpp" />
+    <ClCompile Include="src\vulkan_memory.cpp" />
+    <ClCompile Include="src\vulkan_resource.cpp" />
+    <ClCompile Include="src\vulkan_rhi.cpp" />
+    <ClCompile Include="src\vulkan_swapchain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\vulkan_renderer.h" />
+    <ClInclude Include="include\vulkan_command.h" />
+    <ClInclude Include="include\vulkan_descriptor.h" />
+    <ClInclude Include="include\vulkan_device.h" />
+    <ClInclude Include="include\vulkan_memory.h" />
+    <ClInclude Include="include\vulkan_pipeline.h" />
+    <ClInclude Include="include\vulkan_queue.h" />
+    <ClInclude Include="include\vulkan_resource.h" />
+    <ClInclude Include="include\vulkan_rhi.h" />
+    <ClInclude Include="include\vulkan_swapchain.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
