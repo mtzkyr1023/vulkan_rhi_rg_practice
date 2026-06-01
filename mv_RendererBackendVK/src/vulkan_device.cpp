@@ -1,7 +1,7 @@
 
-#include "vulkan_renderer.h"
+#include "vulkan_device.h"
 
-namespace mv::renderer
+namespace mv::backend
 {
 	VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -9,28 +9,12 @@ namespace mv::renderer
 		const VkDebugUtilsMessengerCallbackDataEXT* data,
 		void* userData);
 
-	bool VulkanRenderer::initialize(void* hwnd)
-	{
-		createInstance();
-		createSurface(hwnd);
-		pickPhysicalDevice();
-		createDevice();
-		createSwapChain(hwnd);
-		createCommandSystem();
-		createSyncObjects();
-		return true;
-	}
-	void VulkanRenderer::deinitialize()
+	void VulkanDevice::initialize()
 	{
 	}
-	void VulkanRenderer::shutdown()
+
+	void VulkanDevice::deinitialize()
 	{
-	}
-	void VulkanRenderer::render()
-	{
-		beginFrame();
-		endFrame();
-		present();
 	}
 
 	void VulkanRenderer::createInstance()

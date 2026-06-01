@@ -16,11 +16,23 @@ namespace mv
 	{
 		using namespace types;
 
-		struct VulkanDevice
+		class VulkanDevice
 		{
-			VkInstance instance = VK_NULL_HANDLE;
-			VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-			VkDevice device = VK_NULL_HANDLE;
+		public:
+			VulkanDevice();
+			~VulkanDevice();
+
+			void initialize();
+			void deinitialize();
+
+			VkInstance instance() { return instance_;}
+			VkPhysicalDevice physicalDevice() { return physicalDevice_; }
+			VkDevice device() { return device_; }
+
+		private:
+			VkInstance instance_ = VK_NULL_HANDLE;
+			VkPhysicalDevice physicalDevice_ = VK_NULL_HANDLE;
+			VkDevice device_ = VK_NULL_HANDLE;
 		};
 	}
 }
