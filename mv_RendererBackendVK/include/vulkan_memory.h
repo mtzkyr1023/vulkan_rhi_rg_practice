@@ -41,8 +41,6 @@ namespace mv
 		class VulkanMemoryAllocator
 		{
 		public:
-			VulkanMemoryAllocator();
-			~VulkanMemoryAllocator();
 
 			void initialize(VkDevice device, u64 poolSize, u32 memoryTypeIndex);
 			void deinitialize(VkDevice device);

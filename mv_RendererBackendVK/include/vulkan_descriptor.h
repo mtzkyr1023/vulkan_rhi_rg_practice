@@ -31,9 +31,6 @@ namespace mv
 			};
 
 		public:
-			VulkanDescriptorAllocator();
-			~VulkanDescriptorAllocator();
-
 			void initialize(VkDevice device, u32 framesInFlight);
 			void deinitialize(VkDevice device);
 

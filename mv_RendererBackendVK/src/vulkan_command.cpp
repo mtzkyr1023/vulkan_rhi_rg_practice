@@ -3,14 +3,6 @@
 
 namespace mv::backend
 {
-	VulkanCommandBuffer::VulkanCommandBuffer()
-	{
-	}
-
-	VulkanCommandBuffer::~VulkanCommandBuffer()
-	{
-	}
-
 	void VulkanCommandBuffer::initialize(VkDevice device, VkCommandPool commandPool)
 	{
 		if (commandBuffer_ != VK_NULL_HANDLE)
@@ -50,17 +42,6 @@ namespace mv::backend
 
 	void VulkanCommandBuffer::drawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, s32 vertexOffset, u32 firstInstance)
 	{
-	}
-
-
-	VulkanCommandPool::VulkanCommandPool()
-	{
-
-	}
-
-	VulkanCommandPool::~VulkanCommandPool()
-	{
-
 	}
 
 	void VulkanCommandPool::initialize(VkDevice device, u32 queueFamilyIndex)

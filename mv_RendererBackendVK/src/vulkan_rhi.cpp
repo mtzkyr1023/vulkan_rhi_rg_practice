@@ -2,16 +2,6 @@
 
 namespace mv::rhi
 {
-	VulkanRHI::VulkanRHI()
-	{
-
-	}
-
-	VulkanRHI::~VulkanRHI()
-	{
-
-	}
-
 	void VulkanRHI::initialize(void* hwnd)
 	{
 	}

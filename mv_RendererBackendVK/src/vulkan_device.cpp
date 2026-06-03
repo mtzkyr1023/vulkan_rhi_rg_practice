@@ -9,15 +9,6 @@ namespace mv::backend
 		const VkDebugUtilsMessengerCallbackDataEXT* data,
 		void* userData);
 
-	VulkanDevice::VulkanDevice()
-	{
-
-	}
-
-	VulkanDevice::~VulkanDevice()
-	{
-
-	}
 
 	void VulkanDevice::initialize()
 	{

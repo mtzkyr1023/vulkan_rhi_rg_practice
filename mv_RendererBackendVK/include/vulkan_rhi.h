@@ -19,9 +19,6 @@ namespace mv
 		class VulkanRHI : public IRHI
 		{
 		public:
-			VulkanRHI();
-			~VulkanRHI();
-
 			void initialize(void* hwnd) override;
 			void deinitialize() override;
 

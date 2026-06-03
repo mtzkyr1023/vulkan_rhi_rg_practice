@@ -2,16 +2,6 @@
 
 namespace mv::backend
 {
-	VulkanMemoryAllocator::VulkanMemoryAllocator()
-	{
-
-	}
-
-	VulkanMemoryAllocator::~VulkanMemoryAllocator()
-	{
-
-	}
-
 	void VulkanMemoryAllocator::initialize(VkDevice device, u64 poolSize, u32 memoryTypeIndex)
 	{
 		pool_.tlsf.initialize(poolSize);

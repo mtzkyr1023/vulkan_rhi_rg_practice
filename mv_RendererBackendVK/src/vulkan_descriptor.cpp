@@ -7,14 +7,6 @@
 
 namespace mv::backend
 {
-	VulkanDescriptorAllocator::VulkanDescriptorAllocator()
-	{
-	}
-
-	VulkanDescriptorAllocator::~VulkanDescriptorAllocator()
-	{
-	}
-
 	void VulkanDescriptorAllocator::initialize(VkDevice device, u32 framesInFlight)
 	{
 		frames_.resize(framesInFlight);

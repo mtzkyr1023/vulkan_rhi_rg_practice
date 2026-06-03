@@ -24,7 +24,7 @@
     <ClInclude Include="include\rhi\commandbuffer.h" />
     <ClInclude Include="include\rhi\rhi.h" />
     <ClInclude Include="include\rhi\resource.h" />
-    <ClInclude Include="include\rhi\shader.h" />
+    <ClInclude Include="include\rhi\pipeline.h" />
     <ClInclude Include="include\util\types.h" />
     <ClInclude Include="src\rhi\commandbuffer.vulkan.cpp" />
   </ItemGroup>

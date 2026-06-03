@@ -15,9 +15,6 @@ namespace mv
 		class VulkanCommandBuffer
 		{
 		public:
-			VulkanCommandBuffer();
-			~VulkanCommandBuffer();
-
 			void initialize(VkDevice device, VkCommandPool commandPool);
 			void deinitialize(VkDevice device, VkCommandPool commandPool);
 
@@ -37,9 +34,6 @@ namespace mv
 		class VulkanCommandPool : public rhi::ICommandPool
 		{
 		public:
-			VulkanCommandPool();
-			~VulkanCommandPool();
-
 			void initialize(VkDevice device, u32 queueFamilyIndex);
 			void deinitialize(VkDevice);
 

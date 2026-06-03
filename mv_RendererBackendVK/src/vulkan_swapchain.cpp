@@ -3,16 +3,6 @@
 
 namespace mv::backend
 {
-	VulkanSwapchain::VulkanSwapchain()
-	{
-
-	}
-
-	VulkanSwapchain::~VulkanSwapchain()
-	{
-
-	}
-
 	void VulkanSwapchain::initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* hwnd)
 	{
 		for (u32 i = 0; i < imageCount_; i++)

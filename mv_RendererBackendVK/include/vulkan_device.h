@@ -19,8 +19,6 @@ namespace mv
 		class VulkanDevice
 		{
 		public:
-			VulkanDevice();
-			~VulkanDevice();
 
 			void initialize();
 			void deinitialize();

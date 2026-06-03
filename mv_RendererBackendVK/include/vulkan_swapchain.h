@@ -16,9 +16,6 @@ namespace mv
 		class VulkanSwapchain
 		{
 		public:
-			VulkanSwapchain();
-			~VulkanSwapchain();
-
 			void initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* hwnd);
 			void deinitialize(VkInstance instance, VkDevice logicalDevice);
 
