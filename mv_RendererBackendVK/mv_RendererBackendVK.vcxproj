@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\vulkan_command.cpp" />
     <ClCompile Include="src\vulkan_descriptor.cpp" />
     <ClCompile Include="src\vulkan_device.cpp" />
     <ClCompile Include="src\vulkan_memory.cpp" />
@@ -32,7 +33,6 @@
     <ClInclude Include="include\vulkan_device.h" />
     <ClInclude Include="include\vulkan_memory.h" />
     <ClInclude Include="include\vulkan_pipeline.h" />
-    <ClInclude Include="include\vulkan_queue.h" />
     <ClInclude Include="include\vulkan_resource.h" />
     <ClInclude Include="include\vulkan_rhi.h" />
     <ClInclude Include="include\vulkan_swapchain.h" />

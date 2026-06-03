@@ -16,9 +16,8 @@ namespace mv
 		{
 			eDeviceLocalImage = 0,
 			eDeviceLocalBuffer,
-			eHostVisible,
-			eHostCoherent,
-			eHostCached,
+			eHostVisibleImage,
+			eHostVisibleBuffer,
 			eNum,
 		};
 
@@ -55,6 +54,7 @@ namespace mv
 		private:
 			MemoryPool pool_;
 		};
+
 	}
 }
 

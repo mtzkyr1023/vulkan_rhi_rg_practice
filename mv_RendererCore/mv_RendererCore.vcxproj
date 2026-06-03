@@ -24,11 +24,13 @@
     <ClInclude Include="include\rhi\commandbuffer.h" />
     <ClInclude Include="include\rhi\rhi.h" />
     <ClInclude Include="include\rhi\resource.h" />
+    <ClInclude Include="include\rhi\shader.h" />
     <ClInclude Include="include\util\types.h" />
     <ClInclude Include="src\rhi\commandbuffer.vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\memory\tlsf_allocator.cpp" />
+    <ClCompile Include="src\rhi\commandbuffer.cpp" />
     <ClCompile Include="src\rhi\rhi.vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>

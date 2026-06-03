@@ -1,6 +1,7 @@
 #ifndef _MV_COMMANDBUFFER_H_
 #define _MV_COMMANDBUFFER_H_
 
+#include "vector"
 #include "memory"
 
 #include "rhi/resource.h"
@@ -12,34 +13,30 @@ namespace mv
 	{
 		using namespace types;
 
-		class ICommandBuffer
+		using CommandBufferHandle = u32;
+
+		enum class EQueueType
 		{
-		public:
-			virtual ~ICommandBuffer() {}
-			virtual void begin() = 0;
-			virtual void end() = 0;
-			virtual void bindVertexBuffer(BufferHandle buffer) = 0;
-			virtual void bindIndexBuffer(BufferHandle buffer) = 0;
-			virtual void draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) = 0;
-			virtual void drawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, s32 vertexOffset, u32 firstInstance) = 0;
+			eGraphics,
+			eCompute,
+			eTransfer,
 		};
 
-		class VulkanCommandBuffer : public ICommandBuffer
+		class ICommandPool
 		{
 		public:
-			VulkanCommandBuffer(const std::shared_ptr<class VulkanRHI>& rhi);
-			~VulkanCommandBuffer();
+			virtual ~ICommandPool() {}
 
-			void begin() override;
-			void end() override;
-			void bindVertexBuffer(BufferHandle buffer) override;
-			void bindIndexBuffer(BufferHandle buffer) override;
-			void draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) override;
-			void drawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, s32 vertexOffset, u32 firstInstance) override;
+			CommandBufferHandle allocate();
+			void free(CommandBufferHandle handle);
 
-		private:
-			std::weak_ptr<class VulkanRHI> rhi_;
-			u32 handle_;
+		protected:
+			virtual CommandBufferHandle createCommandBuffer() = 0;
+
+		protected:
+			std::vector<CommandBufferHandle> freeList_;
+
+			CommandBufferHandle nextHandleIndex_ = 0;
 		};
 	}
 }

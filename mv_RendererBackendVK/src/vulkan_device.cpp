@@ -9,15 +9,39 @@ namespace mv::backend
 		const VkDebugUtilsMessengerCallbackDataEXT* data,
 		void* userData);
 
+	VulkanDevice::VulkanDevice()
+	{
+
+	}
+
+	VulkanDevice::~VulkanDevice()
+	{
+
+	}
+
 	void VulkanDevice::initialize()
 	{
+		createInstance();
+		pickPhysicalDevice();
+		createLogicalDevice();
 	}
 
 	void VulkanDevice::deinitialize()
 	{
+		vkDestroyDevice(device_, nullptr);
+		
+		vkDestroyInstance(instance_, nullptr);
 	}
 
-	void VulkanRenderer::createInstance()
+	void VulkanDevice::waitIdle()
+	{
+		vkQueueWaitIdle(graphicsQueue_);
+		vkQueueWaitIdle(computeQueue_);
+		vkQueueWaitIdle(transferQueue_);
+		vkDeviceWaitIdle(device_);
+	}
+
+	void VulkanDevice::createInstance()
 	{
 		VkApplicationInfo app{};
 		app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -59,16 +83,7 @@ namespace mv::backend
 		vkCreateInstance(&ci, nullptr, &instance_);
 	}
 
-	void VulkanRenderer::createSurface(void* hwnd)
-	{
-		VkWin32SurfaceCreateInfoKHR ci{};
-		ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-		ci.hwnd = (HWND)hwnd;
-		ci.hinstance = GetModuleHandle(nullptr);
-		vkCreateWin32SurfaceKHR(instance_, &ci, nullptr, &surface_);
-	}
-
-	void VulkanRenderer::pickPhysicalDevice()
+	void VulkanDevice::pickPhysicalDevice()
 	{
 		uint32_t deviceCount = 0;
 		vkEnumeratePhysicalDevices(instance_, &deviceCount, nullptr);
@@ -98,15 +113,38 @@ namespace mv::backend
 		}
 	}
 
-	void VulkanRenderer::createDevice()
+	void VulkanDevice::createLogicalDevice()
 	{
 		float priority = 1.0f;
 
-		VkDeviceQueueCreateInfo q{};
-		q.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		q.queueFamilyIndex = graphicsQueueFamilyIndex_;
-		q.queueCount = 1;
-		q.pQueuePriorities = &priority;
+		std::vector<VkDeviceQueueCreateInfo> queueCIs;
+		{
+			VkDeviceQueueCreateInfo q;
+			q.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			q.queueFamilyIndex = graphicsQueueFamilyIndex_;
+			q.queueCount = 1;
+			q.pQueuePriorities = &priority;
+
+			queueCIs.push_back(q);
+		}
+		{
+			VkDeviceQueueCreateInfo q;
+			q.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			q.queueFamilyIndex = computeQueueFamilyIndex_;
+			q.queueCount = 1;
+			q.pQueuePriorities = &priority;
+
+			queueCIs.push_back(q);
+		}
+		{
+			VkDeviceQueueCreateInfo q;
+			q.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			q.queueFamilyIndex = transferQueueFamilyIndex_;
+			q.queueCount = 1;
+			q.pQueuePriorities = &priority;
+
+			queueCIs.push_back(q);
+		}
 
 		const char* extensions[] = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -114,129 +152,18 @@ namespace mv::backend
 
 		VkDeviceCreateInfo ci{};
 		ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		ci.queueCreateInfoCount = 1;
-		ci.pQueueCreateInfos = &q;
+		ci.queueCreateInfoCount = queueCIs.size();
+		ci.pQueueCreateInfos = queueCIs.data();
 		ci.enabledExtensionCount = 1;
 		ci.ppEnabledExtensionNames = extensions;
 
 		vkCreateDevice(physicalDevice_, &ci, nullptr, &device_);
 
 		vkGetDeviceQueue(device_, graphicsQueueFamilyIndex_, 0, &graphicsQueue_);
+		vkGetDeviceQueue(device_, computeQueueFamilyIndex_, 0, &computeQueue_);
+		vkGetDeviceQueue(device_, transferQueueFamilyIndex_, 0, &transferQueue_);
 	}
 
-	void VulkanRenderer::createSwapChain(void* hwnd)
-	{
-		struct SwapchainSupport
-		{
-			VkSurfaceCapabilitiesKHR capabilities;
-			std::vector<VkSurfaceFormatKHR> formats;
-			std::vector<VkPresentModeKHR> presentModes;
-		};
-
-		SwapchainSupport s{};
-
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice_, surface_, &s.capabilities);
-
-		uint32_t count = 0;
-
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice_, surface_, &count, nullptr);
-		s.formats.resize(count);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice_, surface_, &count, s.formats.data());
-
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice_, surface_, &count, nullptr);
-		s.presentModes.resize(count);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice_, surface_, &count, s.presentModes.data());
-
-		VkSurfaceFormatKHR format = s.formats[0];
-		for (const auto& f : s.formats)
-		{
-			if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
-				f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-			{
-				format = f;
-				break;
-			}
-		}
-
-
-		VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-		for (auto m : s.presentModes)
-		{
-			if (m == VK_PRESENT_MODE_MAILBOX_KHR)
-			{
-				presentMode = m;
-				break;
-			}
-		}
-
-		VkExtent2D extents = s.capabilities.currentExtent;
-
-		RECT rect;
-		GetClientRect((HWND)hwnd, &rect);
-
-		VkExtent2D extent{};
-		extent.width = rect.right - rect.left;
-		extent.height = rect.bottom - rect.top;
-
-		extent.width = std::max(s.capabilities.minImageExtent.width,
-			std::min(s.capabilities.maxImageExtent.width, extent.width));
-
-		extent.height = std::max(s.capabilities.minImageExtent.height,
-			std::min(s.capabilities.maxImageExtent.height, extent.height));
-
-		uint32_t imageCount = s.capabilities.minImageCount + 1;
-
-		if (s.capabilities.maxImageCount > 0 &&
-			imageCount > s.capabilities.maxImageCount)
-		{
-			imageCount = s.capabilities.maxImageCount;
-		}
-
-		VkSwapchainCreateInfoKHR ci{};
-		ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		ci.surface = surface_;
-		ci.minImageCount = imageCount;
-		ci.imageFormat = format.format;
-		ci.imageColorSpace = format.colorSpace;
-		ci.imageExtent = extent;
-		ci.imageArrayLayers = 1;
-		ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-			ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		ci.preTransform = s.capabilities.currentTransform;
-		ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		ci.presentMode = presentMode;
-		ci.clipped = VK_TRUE;
-		ci.oldSwapchain = oldSwapchain_;
-
-		VkSwapchainKHR swapchain;
-		vkCreateSwapchainKHR(device_, &ci, nullptr, &swapchain);
-	}
-
-
-
-	void VulkanRenderer::createCommandSystem()
-	{
-
-	}
-
-	void VulkanRenderer::createSyncObjects()
-	{
-	}
-
-	void VulkanRenderer::beginFrame()
-	{
-
-	}
-
-	void VulkanRenderer::endFrame()
-	{
-	}
-
-	void VulkanRenderer::present()
-	{
-	}
 
 
 	VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(

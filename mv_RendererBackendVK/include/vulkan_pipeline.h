@@ -9,10 +9,17 @@ namespace mv
 {
 	namespace backend
 	{
-		struct VulkanPipeline
+		class VulkanPipeline
 		{
-			VkPipeline pipeline = VK_NULL_HANDLE;
-			VkPipelineLayout layout = VK_NULL_HANDLE;
+		public:
+			VulkanPipeline();
+			~VulkanPipeline();
+
+
+
+		private:
+			VkPipeline pipeline_ = VK_NULL_HANDLE;
+			VkPipelineLayout layout_ = VK_NULL_HANDLE;
 		};
 	}
 }
