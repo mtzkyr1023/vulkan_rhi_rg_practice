@@ -7,6 +7,7 @@
 #include "util/types.h"
 
 #include "rhi/resource.h"
+#include "rhi/commandbuffer.h"
 
 namespace mv
 {
@@ -23,7 +24,7 @@ namespace mv
 			virtual void initialize(void* hwnd) = 0;
 			virtual void deinitialize() = 0;
 
-			virtual ICommandBuffer* allocateCommandBuffer(EQueueType type) = 0;
+			virtual CommandBufferHandle allocateCommandBuffer(EQueueType type) = 0;
 
 			virtual BufferHandle createBuffer(const BufferDesc& desc) = 0;
 			virtual TextureHandle createTexture(const TextureDesc& desc) = 0;

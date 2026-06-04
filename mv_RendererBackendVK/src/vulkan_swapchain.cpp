@@ -1,21 +1,22 @@
 
 #include "vulkan_swapchain.h"
+#include "vulkan_device.h"
 
 namespace mv::backend
 {
-	void VulkanSwapchain::initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* hwnd)
+	void VulkanSwapchain::initialize(VulkanDevice* device, void* hwnd)
 	{
 		for (u32 i = 0; i < imageCount_; i++)
 		{
-			vkDestroyImageView(logicalDevice, views_[i], nullptr);
-			vkDestroyImage(logicalDevice, images_[i], nullptr);
+			vkDestroyImageView(device->device(), views_[i], nullptr);
+			vkDestroyImage(device->device(), images_[i], nullptr);
 		}
 
 		VkWin32SurfaceCreateInfoKHR surfaceCI{};
 		surfaceCI.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		surfaceCI.hwnd = (HWND)hwnd;
 		surfaceCI.hinstance = GetModuleHandle(nullptr);
-		vkCreateWin32SurfaceKHR(instance, &surfaceCI, nullptr, &surface_);
+		vkCreateWin32SurfaceKHR(device->instance(), &surfaceCI, nullptr, &surface_);
 
 		struct SwapchainSupport
 		{
@@ -26,17 +27,17 @@ namespace mv::backend
 
 		SwapchainSupport s{};
 
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface_, &s.capabilities);
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice(), surface_, &s.capabilities);
 
 		uint32_t count = 0;
 
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface_, &count, nullptr);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice(), surface_, &count, nullptr);
 		s.formats.resize(count);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface_, &count, s.formats.data());
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice(), surface_, &count, s.formats.data());
 
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface_, &count, nullptr);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice(), surface_, &count, nullptr);
 		s.presentModes.resize(count);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface_, &count, s.presentModes.data());
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice(), surface_, &count, s.presentModes.data());
 
 		VkSurfaceFormatKHR format = s.formats[0];
 		for (const auto& f : s.formats)
@@ -102,14 +103,14 @@ namespace mv::backend
 		swapchainCI.oldSwapchain = oldSwapchain_;
 
 		VkSwapchainKHR swapchain;
-		vkCreateSwapchainKHR(logicalDevice, &swapchainCI, nullptr, &swapchain);
+		vkCreateSwapchainKHR(device->device(), &swapchainCI, nullptr, &swapchain);
 
 		imageCount_ = imageCount;
 		oldSwapchain_ = swapchain_;
 		swapchain_ = swapchain;
 
 		images_.resize(imageCount_);
-		vkGetSwapchainImagesKHR(logicalDevice, swapchain_, &imageCount, images_.data());
+		vkGetSwapchainImagesKHR(device->device(), swapchain_, &imageCount, images_.data());
 
 		for (u32 i = 0; i < imageCount_; i++)
 		{
@@ -128,20 +129,22 @@ namespace mv::backend
 			viewCI.subresourceRange.baseArrayLayer = 0;
 			viewCI.subresourceRange.layerCount = 1;
 			VkImageView view;
-			vkCreateImageView(logicalDevice, &viewCI, nullptr, &view);
+			vkCreateImageView(device->device(), &viewCI, nullptr, &view);
 			views_.push_back(view);
 		}
+
+		device_ = device;
 	}
 
-	void VulkanSwapchain::deinitialize(VkInstance instance, VkDevice logicalDevice)
+	void VulkanSwapchain::deinitialize()
 	{
 		for (u32 i = 0; i < imageCount_; i++)
 		{
-			vkDestroyImageView(logicalDevice, views_[i], nullptr);
-			vkDestroyImage(logicalDevice, images_[i], nullptr);
+			vkDestroyImageView(device_->device(), views_[i], nullptr);
+			vkDestroyImage(device_->device(), images_[i], nullptr);
 		}
 
-		vkDestroySwapchainKHR(logicalDevice, swapchain_, nullptr);
-		vkDestroySurfaceKHR(instance, surface_, nullptr);
+		vkDestroySwapchainKHR(device_->device(), swapchain_, nullptr);
+		vkDestroySurfaceKHR(device_->instance(), surface_, nullptr);
 	}
 }

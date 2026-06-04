@@ -12,11 +12,14 @@ namespace mv
 	{
 		using namespace types;
 
+		class VulkanDevice;
+		class VulkanCommandPool;
+
 		class VulkanCommandBuffer
 		{
 		public:
-			void initialize(VkDevice device, VkCommandPool commandPool);
-			void deinitialize(VkDevice device, VkCommandPool commandPool);
+			void initialize(VkDevice device, VkCommandPool pool);
+			void deinitialize(VkDevice device, VkCommandPool pool);
 
 			void begin();
 			void end();
@@ -29,13 +32,16 @@ namespace mv
 		
 		private:
 			VkCommandBuffer commandBuffer_ = VK_NULL_HANDLE;
+
+			VulkanDevice* device_ = nullptr;
+			VulkanCommandPool* commandPool_ = nullptr;
 		};
 
 		class VulkanCommandPool : public rhi::ICommandPool
 		{
 		public:
-			void initialize(VkDevice device, u32 queueFamilyIndex);
-			void deinitialize(VkDevice);
+			void initialize(VulkanDevice* device, u32 queueFamilyIndex);
+			void deinitialize();
 
 		private:
 			virtual rhi::CommandBufferHandle createCommandBuffer() override;
@@ -45,7 +51,7 @@ namespace mv
 
 			std::vector<std::shared_ptr<VulkanCommandBuffer>> releaseArray_;
 
-			VkDevice device_ = VK_NULL_HANDLE;
+			VulkanDevice* device_ = nullptr;
 		};
 	}
 }

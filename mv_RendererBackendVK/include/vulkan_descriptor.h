@@ -13,6 +13,9 @@ namespace mv
 	{
 		using namespace types;
 
+		class VulkanDevice;
+		class VulkanBindGroupLayout;
+
 		class VulkanDescriptorAllocator
 		{
 		private:
@@ -31,21 +34,23 @@ namespace mv
 			};
 
 		public:
-			void initialize(VkDevice device, u32 framesInFlight);
-			void deinitialize(VkDevice device);
+			void initialize(VulkanDevice* device, u32 framesInFlight);
+			void deinitialize();
 
-			void beginFrame(VkDevice device, u32 frameIndex);
+			void beginFrame(u32 frameIndex);
 
-			VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout);
+			VkDescriptorSet allocate(VulkanBindGroupLayout* layout);
 
 		private:
-			DescriptorPoolWrapper createPool(VkDevice device, u32 maxSets);
+			DescriptorPoolWrapper createPool(u32 maxSets);
 
 		private:
 			std::vector<DescriptorFrameContext> frames_;
 
 
 			u32 currentFrame_ = 0;
+
+			VulkanDevice* device_ = nullptr;
 		};
 	}
 }

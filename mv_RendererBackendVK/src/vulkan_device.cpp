@@ -102,6 +102,8 @@ namespace mv::backend
 				break;
 			}
 		}
+
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &memProps);
 	}
 
 	void VulkanDevice::createLogicalDevice()

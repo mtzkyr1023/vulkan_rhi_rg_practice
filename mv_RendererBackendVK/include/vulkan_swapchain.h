@@ -13,19 +13,21 @@ namespace mv
 	{
 		using namespace types;
 
+		class VulkanDevice;
+
 		class VulkanSwapchain
 		{
 		public:
-			void initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, void* hwnd);
-			void deinitialize(VkInstance instance, VkDevice logicalDevice);
+			void initialize(VulkanDevice* device, void* hwnd);
+			void deinitialize();
 
-			VkSwapchainKHR swapchain() { return swapchain_; }
-			VkSwapchainKHR oldSwapchain() { return oldSwapchain_; }
-			VkFormat format() { return format_; }
-			VkExtent2D extent() { return extent_; }
+			VkSwapchainKHR swapchain() const { return swapchain_; }
+			VkSwapchainKHR oldSwapchain() const { return oldSwapchain_; }
+			VkFormat format() const { return format_; }
+			VkExtent2D extent() const { return extent_; }
 
-			const std::vector<VkImage>& images() { return images_; }
-			const std::vector<VkImageView>& views() { return views_; }
+			const std::vector<VkImage>& images() const { return images_; }
+			const std::vector<VkImageView>& views() const { return views_; }
 
 		private:
 			VkSurfaceKHR surface_ = VK_NULL_HANDLE;
@@ -39,6 +41,8 @@ namespace mv
 			std::vector<VkImageView> views_;
 
 			u32 imageCount_ = 0;
+
+			VulkanDevice* device_ = nullptr;
 		};
 	}
 }

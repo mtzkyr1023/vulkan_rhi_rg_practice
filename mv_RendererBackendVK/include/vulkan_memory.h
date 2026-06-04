@@ -1,6 +1,8 @@
 #ifndef _MV_VULKAN_MEMORY_H_
 #define _MV_VULKAN_MEMORY_H_
 
+#include "array"
+
 #include "vulkan/vulkan.h"
 
 #include "util/types.h"
@@ -11,6 +13,8 @@ namespace mv
 	namespace backend
 	{
 		using namespace types;
+
+		class VulkanDevice;
 		
 		enum class EMemoryType : u8
 		{
@@ -36,21 +40,30 @@ namespace mv
 		{
 			VkDeviceMemory memory = VK_NULL_HANDLE;
 			memory::TLSF tlsf;
+
+			u32 memoryTypeIndex = -1;
 		};
 
 		class VulkanMemoryAllocator
 		{
 		public:
 
-			void initialize(VkDevice device, u64 poolSize, u32 memoryTypeIndex);
-			void deinitialize(VkDevice device);
+			void initialize(VulkanDevice* device, u64 poolSize, EMemoryType type);
+			void deinitialize();
 
-			Allocation allocate(VkDevice device, VkImage image);
-			Allocation allocate(VkDevice device, VkBuffer buffer);
+			Allocation allocate(VkImage image);
+			Allocation allocate(VkBuffer buffer);
 			void free(const Allocation& alloc);
 
 		private:
-			MemoryPool pool_;
+			u32 findMemoryTypeIndex(u32 typeBits, VkMemoryPropertyFlags properties);
+
+		private:
+			std::array<MemoryPool, VK_MAX_MEMORY_TYPES> pools_;
+
+			VulkanDevice* device_ = nullptr;
+
+			EMemoryType type_;
 		};
 
 	}

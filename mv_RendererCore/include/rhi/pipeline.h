@@ -19,7 +19,6 @@ namespace mv
 		enum class EShaderType
 		{
 			eVertex = 0,
-			eGeometory,
 			eFragment,
 
 			eCompute,
@@ -81,6 +80,7 @@ namespace mv
 		struct BindingDesc
 		{
 			u32 binding = 0;
+			u32 count = 0;
 			EDescriptorType type = EDescriptorType::eSampledImage;
 			EShaderType stageType = EShaderType::eVertex;
 		};
@@ -92,7 +92,7 @@ namespace mv
 
 		struct PipelineLayoutDesc
 		{
-			std::vector<BindGroupLayoutDesc> bindGroups;
+			std::vector<BindGroupLayoutHandle> bindGroups;
 		};
 
 		class IShaderManager

@@ -2,29 +2,33 @@
 #include "cassert"
 
 #include "vulkan_descriptor.h"
+#include "vulkan_device.h"
+#include "vulkan_pipeline.h"
 
 
 
 namespace mv::backend
 {
-	void VulkanDescriptorAllocator::initialize(VkDevice device, u32 framesInFlight)
+	void VulkanDescriptorAllocator::initialize(VulkanDevice* device, u32 framesInFlight)
 	{
 		frames_.resize(framesInFlight);
+
+		device_ = device;
 	}
 
-	void VulkanDescriptorAllocator::deinitialize(VkDevice device)
+	void VulkanDescriptorAllocator::deinitialize()
 	{
 		for (auto& frame : frames_)
 		{
 			for (auto& pool : frame.pools)
 			{
-				vkDestroyDescriptorPool(device, pool.pool, nullptr);
+				vkDestroyDescriptorPool(device_->device(), pool.pool, nullptr);
 			}
 			frame.pools.clear();
 			frame.currentPool = 0;
 		}
 	}
-	void VulkanDescriptorAllocator::beginFrame(VkDevice device, u32 frameIndex)
+	void VulkanDescriptorAllocator::beginFrame(u32 frameIndex)
 	{
 		currentFrame_ = frameIndex;
 		auto& frame = frames_[currentFrame_];
@@ -32,27 +36,33 @@ namespace mv::backend
 		frame.currentPool - 0;
 		for (auto& pool : frame.pools)
 		{
-			vkResetDescriptorPool(device, pool.pool, 0);
+			vkResetDescriptorPool(device_->device(), pool.pool, 0);
 
 			pool.usedSets = 0;
 		}
 	}
-	VkDescriptorSet VulkanDescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLayout layout)
+	VkDescriptorSet VulkanDescriptorAllocator::allocate(VulkanBindGroupLayout* layout)
 	{
 		auto& frame = frames_[currentFrame_];
 
 		while (true)
 		{
 			auto& pool = frame.pools[frame.currentPool];
+
+			std::vector<VkDescriptorSetLayout> layouts =
+			{
+				layout->layout(),
+			};
+
 			VkDescriptorSetAllocateInfo alloc;
 			alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			alloc.descriptorPool = pool.pool;
 			alloc.descriptorSetCount = 1;
-			alloc.pSetLayouts = &layout;
+			alloc.pSetLayouts =  layouts.data();
 
 			VkDescriptorSet set;
 
-			VkResult result = vkAllocateDescriptorSets(device, &alloc, &set);
+			VkResult result = vkAllocateDescriptorSets(device_->device(), &alloc, &set);
 
 			if (result == VK_SUCCESS)
 			{
@@ -65,7 +75,7 @@ namespace mv::backend
 				frame.currentPool++;
 				if (frame.currentPool >= frame.pools.size())
 				{
-					frame.pools.push_back(createPool(device, 1000));
+					frame.pools.push_back(createPool(1000));
 				}
 				continue;
 			}
@@ -74,7 +84,7 @@ namespace mv::backend
 			return VK_NULL_HANDLE;
 		}
 	}
-	VulkanDescriptorAllocator::DescriptorPoolWrapper VulkanDescriptorAllocator::createPool(VkDevice device, u32 maxSets)
+	VulkanDescriptorAllocator::DescriptorPoolWrapper VulkanDescriptorAllocator::createPool(u32 maxSets)
 	{
 		DescriptorPoolWrapper wrapper;
 
@@ -98,7 +108,7 @@ namespace mv::backend
 		info.poolSizeCount = static_cast<uint32_t>(sizes.size());
 		info.pPoolSizes = sizes.data();
 
-		vkCreateDescriptorPool(device, &info, nullptr, &wrapper.pool);
+		vkCreateDescriptorPool(device_->device(), &info, nullptr, &wrapper.pool);
 
 		return wrapper;
 	}

@@ -8,7 +8,6 @@
 #include "vulkan_swapchain.h"
 #include "vulkan_memory.h"
 #include "vulkan_pipeline.h"
-#include "vulkan_queue.h"
 
 #include "rhi/rhi.h"
 
@@ -22,11 +21,14 @@ namespace mv
 			void initialize(void* hwnd) override;
 			void deinitialize() override;
 
+			CommandBufferHandle allocateCommandBuffer(EQueueType queueType) override;
+
 			virtual BufferHandle createBuffer(const BufferDesc& desc) override;
 			virtual TextureHandle createTexture(const TextureDesc& desc) override;
 
 		private:
 			backend::VulkanDevice device_;
+			backend::VulkanSwapchain swapchain_;
 
 			backend::VulkanDescriptorAllocator descriptorAllocator_;
 
@@ -34,6 +36,12 @@ namespace mv
 			std::vector<backend::VulkanImage> images_;
 
 			backend::VulkanMemoryAllocator memoryAllocator_[(u32)backend::EMemoryType::eNum];
+
+			backend::VulkanShaderManager shaderManager_;
+			backend::VulkanBindGroupLayoutManager layoutManager_;
+			backend::VulkanPipelineManager pipelineManager_;
+
+			backend::VulkanCommandPool commandPool_;
 
 			BufferHandle nextBufferHandle_ = 0;
 			TextureHandle nextTextureHandle_ = 0;

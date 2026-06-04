@@ -1,6 +1,8 @@
 
 #include "vulkan_command.h"
 
+#include "vulkan_device.h"
+
 namespace mv::backend
 {
 	void VulkanCommandBuffer::initialize(VkDevice device, VkCommandPool commandPool)
@@ -44,33 +46,34 @@ namespace mv::backend
 	{
 	}
 
-	void VulkanCommandPool::initialize(VkDevice device, u32 queueFamilyIndex)
+	void VulkanCommandPool::initialize(VulkanDevice* device, u32 queueFamilyIndex)
 	{
 		if (commandPool_ != VK_NULL_HANDLE)
 			return;
+
 		VkCommandPoolCreateInfo poolCI{};
 		poolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		poolCI.queueFamilyIndex = queueFamilyIndex;
 		poolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		vkCreateCommandPool(device, &poolCI, nullptr, &commandPool_);
+		vkCreateCommandPool(device->device(), &poolCI, nullptr, &commandPool_);
 		device_ = device;
 	}
 
-	void VulkanCommandPool::deinitialize(VkDevice device)
+	void VulkanCommandPool::deinitialize()
 	{
 		for (const auto& cmd : releaseArray_)
 		{
-			cmd->deinitialize(device, commandPool_);
+			cmd->deinitialize(device_->device(), commandPool_);
 		}
 
-		vkDestroyCommandPool(device, commandPool_, nullptr);
+		vkDestroyCommandPool(device_->device(), commandPool_, nullptr);
 		commandPool_ = VK_NULL_HANDLE;
 	}
 
 	rhi::CommandBufferHandle VulkanCommandPool::createCommandBuffer()
 	{
 		std::shared_ptr<VulkanCommandBuffer> cmd = std::make_shared<VulkanCommandBuffer>();
-		cmd->initialize(device_, commandPool_);
+		cmd->initialize(device_->device(), commandPool_);
 
 		releaseArray_.push_back(cmd);
 
