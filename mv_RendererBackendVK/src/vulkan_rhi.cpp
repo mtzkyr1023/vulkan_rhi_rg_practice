@@ -7,9 +7,9 @@ namespace mv::rhi
 		device_.initialize();
 		swapchain_.initialize(&device_, hwnd);
 		
-		for (u32 i = 0; i < (u32)backend::EMemoryType::eNum; i++)
+		for (u32 i = 0; i < (u32)EMemoryType::eNum; i++)
 		{
-			memoryAllocator_[i].initialize(&device_, 128 * 1024, (backend::EMemoryType)i);
+			memoryAllocator_[i].initialize(&device_, 128 * 1024, (EMemoryType)i);
 		}
 
 		shaderManager_.initialize(&device_);
@@ -26,7 +26,7 @@ namespace mv::rhi
 		layoutManager_.deinitialize();
 		pipelineManager_.deinitialize();
 
-		for (u32 i = 0; i < (u32)backend::EMemoryType::eNum; i++)
+		for (u32 i = 0; i < (u32)EMemoryType::eNum; i++)
 		{
 			memoryAllocator_[i].deinitialize();
 		}

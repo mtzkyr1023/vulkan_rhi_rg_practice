@@ -14,6 +14,15 @@ namespace mv
 		using BufferHandle = u32;
 		using TextureHandle = u32;
 
+		enum class EMemoryType : u8
+		{
+			eDeviceLocalImage = 0,
+			eDeviceLocalBuffer,
+			eHostVisibleImage,
+			eHostVisibleBuffer,
+			eNum,
+		};
+
 		enum class EBufferUsage
 		{
 			eVertex = (1 << 0),
@@ -33,6 +42,29 @@ namespace mv
 			eStorage = (1 << 3),
 		};
 
+		enum class EResourceState
+		{
+			Undefines = 0,
+
+			CopySrc,
+			CopyDst,
+
+			VertexBuffer,
+			IndexBuffer,
+
+			ConstantBuffer,
+
+			ShaderRead,
+			ShaderWrite,
+
+			RenderTarget,
+
+			DepthWrite,
+			DepthRead,
+
+			Present,
+		};
+
 		struct BufferDesc
 		{
 			u64 size;
@@ -45,6 +77,22 @@ namespace mv
 			u32 height;
 			u32 depth;
 			ETextureUsage usage;
+		};
+
+		struct TextureBarrier
+		{
+			TextureHandle texture;
+
+			EResourceState before;
+			EResourceState after;
+		};
+
+		struct BufferBarrier
+		{
+			BufferHandle buffer;
+
+			EResourceState before;
+			EResourceState after;
 		};
 	}
 }

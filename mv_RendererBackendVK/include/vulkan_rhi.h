@@ -35,7 +35,7 @@ namespace mv
 			std::vector<backend::VulkanBuffer> buffers_;
 			std::vector<backend::VulkanImage> images_;
 
-			backend::VulkanMemoryAllocator memoryAllocator_[(u32)backend::EMemoryType::eNum];
+			backend::VulkanMemoryAllocator memoryAllocator_[(u32)EMemoryType::eNum];
 
 			backend::VulkanShaderManager shaderManager_;
 			backend::VulkanBindGroupLayoutManager layoutManager_;

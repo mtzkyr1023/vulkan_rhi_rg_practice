@@ -14,6 +14,18 @@ namespace mv
 
 		class VulkanDevice;
 		class VulkanCommandPool;
+		class VulkanPipeline;
+		struct VulkanBuffer;
+		struct VulkanImage;
+
+		struct VulkanStateInfo
+		{
+			VkPipelineStageFlags stage;
+
+			VkAccessFlags access;
+
+			VkImageLayout layout;
+		};
 
 		class VulkanCommandBuffer
 		{
@@ -24,8 +36,10 @@ namespace mv
 			void begin();
 			void end();
 
-			void bindVertexBuffer(rhi::BufferHandle buffer);
-			void bindIndexBuffer(rhi::BufferHandle buffer);
+			void bindGraphicsPipeline(const VulkanPipeline& pipeline);
+
+			void bindVertexBuffer(const VulkanBuffer& buffer);
+			void bindIndexBuffer(const VulkanBuffer& buffer);
 
 			void draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance);
 			void drawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, s32 vertexOffset, u32 firstInstance);

@@ -2,6 +2,8 @@
 #include "vulkan_command.h"
 
 #include "vulkan_device.h"
+#include "vulkan_pipeline.h"
+#include "vulkan_resource.h"
 
 namespace mv::backend
 {
@@ -24,26 +26,36 @@ namespace mv::backend
 
 	void VulkanCommandBuffer::begin()
 	{
+		VkCommandBufferBeginInfo bi{};
+		vkBeginCommandBuffer(commandBuffer_, &bi);
 	}
 
 	void VulkanCommandBuffer::end()
 	{
+		vkEndCommandBuffer(commandBuffer_);
 	}
 
-	void VulkanCommandBuffer::bindVertexBuffer(rhi::BufferHandle buffer)
+	void VulkanCommandBuffer::bindGraphicsPipeline(const VulkanPipeline& pipeline)
+	{
+		vkCmdBindPipeline(commandBuffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline());
+	}
+
+	void VulkanCommandBuffer::bindVertexBuffer(const VulkanBuffer& buffer)
 	{
 	}
 
-	void VulkanCommandBuffer::bindIndexBuffer(rhi::BufferHandle buffer)
+	void VulkanCommandBuffer::bindIndexBuffer(const VulkanBuffer& buffer)
 	{
 	}
 
 	void VulkanCommandBuffer::draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance)
 	{
+		vkCmdDraw(commandBuffer_, vertexCount, instanceCount, firstVertex, firstInstance);
 	}
 
 	void VulkanCommandBuffer::drawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, s32 vertexOffset, u32 firstInstance)
 	{
+		vkCmdDrawIndexed(commandBuffer_, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 	}
 
 	void VulkanCommandPool::initialize(VulkanDevice* device, u32 queueFamilyIndex)

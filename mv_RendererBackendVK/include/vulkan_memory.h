@@ -8,6 +8,8 @@
 #include "util/types.h"
 #include "memory/tlsf_allocator.h"
 
+#include "rhi/resource.h"
+
 namespace mv
 {
 	namespace backend
@@ -15,15 +17,6 @@ namespace mv
 		using namespace types;
 
 		class VulkanDevice;
-		
-		enum class EMemoryType : u8
-		{
-			eDeviceLocalImage = 0,
-			eDeviceLocalBuffer,
-			eHostVisibleImage,
-			eHostVisibleBuffer,
-			eNum,
-		};
 
 		struct Allocation
 		{
@@ -48,7 +41,7 @@ namespace mv
 		{
 		public:
 
-			void initialize(VulkanDevice* device, u64 poolSize, EMemoryType type);
+			void initialize(VulkanDevice* device, u64 poolSize, rhi::EMemoryType type);
 			void deinitialize();
 
 			Allocation allocate(VkImage image);
@@ -63,7 +56,7 @@ namespace mv
 
 			VulkanDevice* device_ = nullptr;
 
-			EMemoryType type_;
+			rhi::EMemoryType type_;
 		};
 
 	}
