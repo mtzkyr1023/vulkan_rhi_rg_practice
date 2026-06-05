@@ -44,25 +44,25 @@ namespace mv
 
 		enum class EResourceState
 		{
-			Undefines = 0,
+			eUndefines = 0,
 
-			CopySrc,
-			CopyDst,
+			eCopySrc,
+			eCopyDst,
 
-			VertexBuffer,
-			IndexBuffer,
+			eVertexBuffer,
+			eIndexBuffer,
 
-			ConstantBuffer,
+			eConstantBuffer,
 
-			ShaderRead,
-			ShaderWrite,
+			eShaderRead,
+			eShaderWrite,
 
-			RenderTarget,
+			eRenderTarget,
 
-			DepthWrite,
-			DepthRead,
+			eDepthWrite,
+			eDepthRead,
 
-			Present,
+			ePresent,
 		};
 
 		struct BufferDesc
