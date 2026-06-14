@@ -6,7 +6,7 @@ namespace mv::rhi
 	{
 		device_.initialize();
 		swapchain_.initialize(&device_, hwnd);
-		
+
 		for (u32 i = 0; i < (u32)EMemoryType::eNum; i++)
 		{
 			memoryAllocator_[i].initialize(&device_, 128 * 1024, (EMemoryType)i);
@@ -16,8 +16,12 @@ namespace mv::rhi
 		layoutManager_.initialize(&device_);
 		pipelineManager_.initialize(&device_, &shaderManager_, &layoutManager_);
 
-		commandPool_.initialize(&device_, device_.graphicsQueueFamilyIndex());
+
+		commandPool_[(u32)EQueueType::eGraphics].initialize(&device_, device_.graphicsQueueFamilyIndex());
+		commandPool_[(u32)EQueueType::eCompute].initialize(&device_, device_.graphicsQueueFamilyIndex());
+		commandPool_[(u32)EQueueType::eTransfer].initialize(&device_, device_.graphicsQueueFamilyIndex());
 	}
+
 	void VulkanRHI::deinitialize()
 	{
 		device_.waitIdle();
@@ -37,7 +41,7 @@ namespace mv::rhi
 
 	CommandBufferHandle VulkanRHI::allocateCommandBuffer(EQueueType queueType)
 	{
-		return commandPool_.allocate();
+		return commandPool_[(u32)queueType].allocate();
 	}
 
 	BufferHandle VulkanRHI::createBuffer(const BufferDesc& desc)

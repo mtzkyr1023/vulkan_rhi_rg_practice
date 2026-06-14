@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClInclude Include="include\memory\tlsf_allocator.h" />
     <ClInclude Include="include\renderer.h" />
+    <ClInclude Include="include\rg\render_graph.h" />
     <ClInclude Include="include\rhi\commandbuffer.h" />
     <ClInclude Include="include\rhi\rhi.h" />
     <ClInclude Include="include\rhi\resource.h" />
@@ -30,6 +31,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\memory\tlsf_allocator.cpp" />
+    <ClCompile Include="src\rg\render_graph.cpp" />
     <ClCompile Include="src\rhi\commandbuffer.cpp" />
     <ClCompile Include="src\rhi\rhi.vulkan.cpp" />
   </ItemGroup>

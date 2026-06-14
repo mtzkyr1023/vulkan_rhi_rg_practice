@@ -28,6 +28,8 @@ namespace mv
 
 			virtual BufferHandle createBuffer(const BufferDesc& desc) = 0;
 			virtual TextureHandle createTexture(const TextureDesc& desc) = 0;
+
+			
 		};
 	}
 }

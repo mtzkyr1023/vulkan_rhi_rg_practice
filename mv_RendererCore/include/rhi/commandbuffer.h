@@ -17,9 +17,11 @@ namespace mv
 
 		enum class EQueueType
 		{
-			eGraphics,
+			eGraphics = 0,
 			eCompute,
 			eTransfer,
+
+			eNum,
 		};
 
 		class ICommandPool

@@ -41,7 +41,7 @@ namespace mv
 			backend::VulkanBindGroupLayoutManager layoutManager_;
 			backend::VulkanPipelineManager pipelineManager_;
 
-			backend::VulkanCommandPool commandPool_;
+			backend::VulkanCommandPool commandPool_[(u32)EQueueType::eNum];
 
 			BufferHandle nextBufferHandle_ = 0;
 			TextureHandle nextTextureHandle_ = 0;

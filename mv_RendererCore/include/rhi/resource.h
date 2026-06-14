@@ -65,6 +65,11 @@ namespace mv
 			ePresent,
 		};
 
+		enum class ETextureFormat
+		{
+
+		};
+
 		struct BufferDesc
 		{
 			u64 size;
@@ -77,6 +82,8 @@ namespace mv
 			u32 height;
 			u32 depth;
 			ETextureUsage usage;
+
+			ETextureFormat foramt;
 		};
 
 		struct TextureBarrier
