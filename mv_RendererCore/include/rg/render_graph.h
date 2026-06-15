@@ -9,6 +9,7 @@
 
 #include "rhi/resource.h"
 #include "rhi/commandbuffer.h"
+#include "rhi/rhi.h"
 
 namespace mv
 {
@@ -18,6 +19,22 @@ namespace mv
 
 		using RGTextureHandle = u32;
 		using RGBufferHandle = u32;
+
+		class RenderGraph;
+		struct RenderPass;
+		class Builder;
+		class Context;
+
+		enum class ERGResourceUsase
+		{
+			ShaderRead = 0,
+			ColorAttachment,
+			DepthAttachment,
+			CopySrc,
+			CopyDst,
+			StorageRead,
+			StorageWrite,
+		};
 
 		struct RGTextureDesc
 		{
@@ -33,22 +50,45 @@ namespace mv
 
 		struct RGTexture
 		{
+			RGTextureHandle handle;
 			RGTextureDesc desc;
+
+			rhi::TextureHandle physical;
 		};
 
 		struct RGBuffer
 		{
+			RGBufferHandle handle;
 			RGBufferDesc desc;
+
+			rhi::BufferHandle physical;
+		};
+
+		struct RGTextureUsage
+		{
+			RGTextureHandle handle;
+
+			ERGResourceUsase usage;
+		};
+
+
+		struct RGBufferUsage
+		{
+			RGBufferHandle handle;
+
+			ERGResourceUsase usage;
 		};
 
 		struct RenderPass
 		{
 			std::string name;
 
-			std::vector<RGTextureHandle> reads;
-			std::vector<RGTextureHandle> writes;
+			std::vector<RGTextureUsage> textureUsages;
+			std::vector<RGBufferUsage> bufferUsages;
 
-			std::function<void(rhi::CommandBufferHandle) > execute;
+			std::function<void(Builder&)> setup;
+
+			std::function<void(Context&)> execute;
 		};
 
 		struct CompiledPass
@@ -59,9 +99,42 @@ namespace mv
 		};
 
 
+		class Builder
+		{
+		public:
+			Builder(RenderGraph& graph_, RenderPass& pass);
+
+			void access(RGTextureHandle handle, ERGResourceUsase usage);
+			void access(RGBufferHandle handle, ERGResourceUsase usage);
+
+		private:
+			RenderGraph& graph_;
+
+			RenderPass& pass_;
+		};
+
+
+		class Context
+		{
+		public:
+			Context(RenderGraph& graph, rhi::IRHI* rhi);
+
+			rhi::TextureHandle getTexture(RGTextureHandle handle);
+			rhi::BufferHandle getBuffer(RGBufferHandle handle);
+
+			rhi::IRHI* rhi() { return rhi_; }
+
+		private:
+			RenderGraph& graph_;
+
+			rhi::IRHI* rhi_;
+		};
+
+
 		class RenderGraph
 		{
 		public:
+
 			RGTextureHandle createTexture(const RGTextureDesc& desc);
 			RGBufferHandle createBuffer(const RGBufferDesc& desc);
 
@@ -74,6 +147,7 @@ namespace mv
 		private:
 
 			std::vector<RGTexture> textures_;
+			std::vector<RGBuffer> buffers_;
 
 			std::vector<RenderPass> passes_;
 
