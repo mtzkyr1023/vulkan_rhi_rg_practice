@@ -19,25 +19,42 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\renderer.h" />
-    <ClInclude Include="include\rg\render_graph.h" />
-    <ClInclude Include="include\util\types.h" />
+    <ClCompile Include="src\memory\tlsf_allocator.cpp" />
+    <ClCompile Include="src\rhi\commandbuffer.cpp" />
+    <ClCompile Include="src\rhi\rhi.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_command.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_descriptor.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_device.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_frame_resource.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_memory.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_pipeline.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_resource.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_rhi.cpp" />
+    <ClCompile Include="src\rhi\vk\vulkan_swapchain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\rg\render_graph.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\mv_RendererBackend\mv_RendererBackend.vcxproj">
-      <Project>{5d1c79cc-d567-44ce-b823-f114ad322f5c}</Project>
-    </ProjectReference>
+    <ClInclude Include="include\memory\tlsf_allocator.h" />
+    <ClInclude Include="include\rhi\commandbuffer.h" />
+    <ClInclude Include="include\rhi\pipeline.h" />
+    <ClInclude Include="include\rhi\resource.h" />
+    <ClInclude Include="include\rhi\rhi.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_command.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_descriptor.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_device.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_frame_resource.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_memory.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_pipeline.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_resource.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_rhi.h" />
+    <ClInclude Include="include\rhi\vk\vulkan_swapchain.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{be42973c-83ff-4812-8d86-8ca0a127b16d}</ProjectGuid>
-    <RootNamespace>mvlibrary</RootNamespace>
+    <ProjectGuid>{5D1C79CC-D567-44CE-B823-F114AD322F5C}</ProjectGuid>
+    <RootNamespace>mvBackend</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>mv_RendererCore</ProjectName>
+    <ProjectName>mv_RendererBackend</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -88,7 +105,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;MVLIBRARY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;MVBACKEND_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -106,7 +123,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;MVLIBRARY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;MVBACKEND_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -122,19 +139,24 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;MVLIBRARY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;MVBACKEND_EXPORTS;_WINDOWS;_USRDLL;MV_RENDERER_CORE_EXPORTS;VK_USE_PLATFORM_WIN32_KHR;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)\include\;$(SolutionDir)\mv_RendererBackend\include\;$(VULKAN_SDK)\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VK_SDK_PATH)\Include;$(ProjectDir)\include;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>mv_RendererBackend.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <Lib>
+      <AdditionalLibraryDirectories>$(VULKAN_SDK)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -142,7 +164,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;MVLIBRARY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;MVBACKEND_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>

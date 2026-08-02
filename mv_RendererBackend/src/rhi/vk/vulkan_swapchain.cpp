@@ -1,0 +1,177 @@
+
+#include "rhi/vk/vulkan_swapchain.h"
+#include "rhi/vk/vulkan_device.h"
+
+namespace mv::backend
+{
+	void VulkanSwapchain::initialize(VulkanDevice* device, void* hwnd)
+	{
+		for (u32 i = 0; i < imageCount_; i++)
+		{
+			vkDestroyImageView(device->device(), views_[i], nullptr);
+			vkDestroyImage(device->device(), images_[i], nullptr);
+		}
+
+		VkWin32SurfaceCreateInfoKHR surfaceCI{};
+		surfaceCI.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+		surfaceCI.hwnd = (HWND)hwnd;
+		surfaceCI.hinstance = GetModuleHandle(nullptr);
+		vkCreateWin32SurfaceKHR(device->instance(), &surfaceCI, nullptr, &surface_);
+
+		struct SwapchainSupport
+		{
+			VkSurfaceCapabilitiesKHR capabilities;
+			std::vector<VkSurfaceFormatKHR> formats;
+			std::vector<VkPresentModeKHR> presentModes;
+		};
+
+		SwapchainSupport s{};
+
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice(), surface_, &s.capabilities);
+
+		uint32_t count = 0;
+
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice(), surface_, &count, nullptr);
+		s.formats.resize(count);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice(), surface_, &count, s.formats.data());
+
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice(), surface_, &count, nullptr);
+		s.presentModes.resize(count);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice(), surface_, &count, s.presentModes.data());
+
+		VkSurfaceFormatKHR format = s.formats[0];
+		for (const auto& f : s.formats)
+		{
+			if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
+				f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			{
+				format = f;
+				break;
+			}
+		}
+
+
+		VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+		for (auto m : s.presentModes)
+		{
+			if (m == VK_PRESENT_MODE_MAILBOX_KHR)
+			{
+				presentMode = m;
+				break;
+			}
+		}
+
+		VkExtent2D extents = s.capabilities.currentExtent;
+
+		RECT rect;
+		GetClientRect((HWND)hwnd, &rect);
+
+		VkExtent2D extent{};
+		extent.width = rect.right - rect.left;
+		extent.height = rect.bottom - rect.top;
+
+		extent.width = std::max(s.capabilities.minImageExtent.width,
+			std::min(s.capabilities.maxImageExtent.width, extent.width));
+
+		extent.height = std::max(s.capabilities.minImageExtent.height,
+			std::min(s.capabilities.maxImageExtent.height, extent.height));
+
+		u32 imageCount = s.capabilities.minImageCount + 1;
+
+		if (s.capabilities.maxImageCount > 0 &&
+			imageCount > s.capabilities.maxImageCount)
+		{
+			imageCount = s.capabilities.maxImageCount;
+		}
+
+		extent_ = extent;
+
+		VkSwapchainCreateInfoKHR swapchainCI{};
+		swapchainCI.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+		swapchainCI.surface = surface_;
+		swapchainCI.minImageCount = imageCount;
+		swapchainCI.imageFormat = format.format;
+		swapchainCI.imageColorSpace = format.colorSpace;
+		swapchainCI.imageExtent = extent;
+		swapchainCI.imageArrayLayers = 1;
+		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+		swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		swapchainCI.preTransform = s.capabilities.currentTransform;
+		swapchainCI.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		swapchainCI.presentMode = presentMode;
+		swapchainCI.clipped = VK_TRUE;
+		swapchainCI.oldSwapchain = oldSwapchain_;
+
+		VkSwapchainKHR swapchain;
+		vkCreateSwapchainKHR(device->device(), &swapchainCI, nullptr, &swapchain);
+
+		imageCount_ = imageCount;
+		oldSwapchain_ = swapchain_;
+		swapchain_ = swapchain;
+
+		images_.resize(imageCount_);
+		vkGetSwapchainImagesKHR(device->device(), swapchain_, &imageCount, images_.data());
+
+		for (u32 i = 0; i < imageCount_; i++)
+		{
+			VkImageViewCreateInfo viewCI{};
+			viewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			viewCI.image = images_[i];
+			viewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			viewCI.format = format.format;
+			viewCI.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewCI.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewCI.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewCI.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			viewCI.subresourceRange.baseMipLevel = 0;
+			viewCI.subresourceRange.levelCount = 1;
+			viewCI.subresourceRange.baseArrayLayer = 0;
+			viewCI.subresourceRange.layerCount = 1;
+			VkImageView view;
+			vkCreateImageView(device->device(), &viewCI, nullptr, &view);
+			views_.push_back(view);
+
+			VkSemaphoreCreateInfo semaphoreCI{};
+			semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+			VkSemaphore semaphore;
+			vkCreateSemaphore(device->device(), &semaphoreCI, nullptr, &semaphore);
+			renderFinishedSemaphores_.push_back(semaphore);
+		}
+
+		device_ = device;
+	}
+
+	void VulkanSwapchain::deinitialize()
+	{
+		for (u32 i = 0; i < imageCount_; i++)
+		{
+			vkDestroyImageView(device_->device(), views_[i], nullptr);
+			vkDestroySemaphore(device_->device(), renderFinishedSemaphores_[i], nullptr);
+		}
+
+		vkDestroySwapchainKHR(device_->device(), swapchain_, nullptr);
+		vkDestroySurfaceKHR(device_->instance(), surface_, nullptr);
+	}
+
+
+	void VulkanSwapchain::acquireNextImage(VkSemaphore semaphore)
+	{
+		vkAcquireNextImageKHR(device_->device(), swapchain_, UINT64_MAX, semaphore, VK_NULL_HANDLE, &imageIndex_);
+	}
+
+	VkResult VulkanSwapchain::present(VkQueue queue)
+	{
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &renderFinishedSemaphores_[imageIndex_];
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &swapchain_;
+		presentInfo.pImageIndices = &imageIndex_;
+		presentInfo.pResults = nullptr;
+		return vkQueuePresentKHR(queue, &presentInfo);
+	}
+}

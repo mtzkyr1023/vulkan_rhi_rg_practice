@@ -1,0 +1,12 @@
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\memory\tlsf_allocator.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\tlsf_allocator.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\commandbuffer.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\commandbuffer.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\rhi.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\rhi.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_command.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_command.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_descriptor.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_descriptor.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_device.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_device.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_frame_resource.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_frame_resource.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_memory.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_memory.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_pipeline.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_pipeline.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_resource.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_resource.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_rhi.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_rhi.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\src\rhi\vk\vulkan_swapchain.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\x64\Debug\vulkan_swapchain.obj
