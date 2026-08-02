@@ -96,7 +96,7 @@ namespace mv::rg
 	{
 		for (auto& pass : compiledPasses_)
 		{
-
+			
 		}
 	}
 }
