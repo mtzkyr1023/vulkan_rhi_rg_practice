@@ -3,7 +3,7 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="mv_RendererBackend/mv_RendererBackend.vcxproj" />
+  <Project Path="mv_RendererBackend/mv_RendererBackend.vcxproj" Id="5d1c79cc-d567-44ce-b823-f114ad322f5c" />
   <Project Path="mv_RendererCore/mv_RendererCore.vcxproj" Id="be42973c-83ff-4812-8d86-8ca0a127b16d" />
   <Project Path="proj001/proj001.vcxproj" Id="bfc56906-a12c-4894-820b-d07ab444fe45">
     <BuildDependency Project="mv_RendererCore/mv_RendererCore.vcxproj" />

@@ -37,7 +37,7 @@ namespace mv
 
 		struct BlendState
 		{
-
+			
 		};
 
 		struct DepthStencilState

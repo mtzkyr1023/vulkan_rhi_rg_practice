@@ -105,7 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\include;E:\workspace_f\vulkan_rhi_rg_practice\proj001\include;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererBackend\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)mv_RendererBackend\include\;$(SolutionDir)mv_RendererCore\include\;$(SolutionDir)proj001\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
