@@ -1,8 +1,7 @@
-#include "rhi/vk/vulkan_rhi.h"
+#include "rhi/vk1_4/vulkan_rhi.h"
 
-namespace mv::rhi
+namespace mv::backend::vk1_4
 {
-
 
 
 	void VulkanRHI::initialize(void* hwnd)
@@ -10,9 +9,9 @@ namespace mv::rhi
 		device_.initialize();
 		swapchain_.initialize(&device_, hwnd);
 
-		for (u32 i = 0; i < (u32)EMemoryType::eNum; i++)
+		for (u32 i = 0; i < (u32)rhi::EMemoryType::eNum; i++)
 		{
-			memoryAllocator_[i].initialize(&device_, 128 * 1024, (EMemoryType)i);
+			memoryAllocator_[i].initialize(&device_, 128 * 1024, (rhi::EMemoryType)i);
 		}
 
 		shaderManager_.initialize(&device_);
@@ -20,14 +19,14 @@ namespace mv::rhi
 		pipelineManager_.initialize(&device_, &shaderManager_, &layoutManager_);
 
 
-		commandPool_[(u32)EQueueType::eGraphics].initialize(&device_, device_.graphicsQueueFamilyIndex());
-		commandPool_[(u32)EQueueType::eCompute].initialize(&device_, device_.graphicsQueueFamilyIndex());
-		commandPool_[(u32)EQueueType::eTransfer].initialize(&device_, device_.graphicsQueueFamilyIndex());
+		commandPool_[(u32)rhi::EQueueType::eGraphics].initialize(&device_, device_.graphicsQueueFamilyIndex());
+		commandPool_[(u32)rhi::EQueueType::eCompute].initialize(&device_, device_.graphicsQueueFamilyIndex());
+		commandPool_[(u32)rhi::EQueueType::eTransfer].initialize(&device_, device_.graphicsQueueFamilyIndex());
 
 		frameResources_.resize((size_t)framesInFlight_);
 		for (u32 i = 0; i < framesInFlight_; i++)
 		{
-			frameResources_[i].initialize(&device_, &commandPool_[(u32)EQueueType::eGraphics]);
+			frameResources_[i].initialize(&device_, &commandPool_[(u32)rhi::EQueueType::eGraphics]);
 		}
 
 		createBackbuffer();
@@ -43,18 +42,18 @@ namespace mv::rhi
 	
 		for (u32 i = 0; i < framesInFlight_; i++)
 		{
-			frameResources_[i].deinitialize(&device_, &commandPool_[(u32)EQueueType::eGraphics]);
+			frameResources_[i].deinitialize(&device_, &commandPool_[(u32)rhi::EQueueType::eGraphics]);
 		}
 
-		commandPool_[(u32)EQueueType::eGraphics].deinitialize();
-		commandPool_[(u32)EQueueType::eCompute].deinitialize();
-		commandPool_[(u32)EQueueType::eTransfer].deinitialize();
+		commandPool_[(u32)rhi::EQueueType::eGraphics].deinitialize();
+		commandPool_[(u32)rhi::EQueueType::eCompute].deinitialize();
+		commandPool_[(u32)rhi::EQueueType::eTransfer].deinitialize();
 
 		shaderManager_.deinitialize();
 		layoutManager_.deinitialize();
 		pipelineManager_.deinitialize();
 
-		for (u32 i = 0; i < (u32)EMemoryType::eNum; i++)
+		for (u32 i = 0; i < (u32)rhi::EMemoryType::eNum; i++)
 		{
 			memoryAllocator_[i].deinitialize();
 		}
@@ -68,14 +67,14 @@ namespace mv::rhi
 		device_.waitIdle();
 	}
 
-	FrameContext VulkanRHI::beginFrame()
+	rhi::FrameContext VulkanRHI::beginFrame()
 	{
-		FrameContext context;
+		rhi::FrameContext context;
 		currentFrame_ = (currentFrame_+ 1) % framesInFlight_;
 		
 		context.currentFrameIndex = currentFrame_;
 
-		backend::VulkanFrameResource& frameResource = frameResources_[currentFrame_];
+		VulkanFrameResource& frameResource = frameResources_[currentFrame_];
 
 		vkWaitForFences(device_.device(), 1, &frameResource.inFlightFence, VK_TRUE, UINT64_MAX);
 
@@ -83,7 +82,7 @@ namespace mv::rhi
 
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		vkBeginCommandBuffer(commandPool_[(u32)EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer).commandBuffer(), &beginInfo);
+		vkBeginCommandBuffer(commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer).commandBuffer(), &beginInfo);
 
 		swapchain_.acquireNextImage(frameResource.imageAvailableSemaphore);
 
@@ -97,9 +96,9 @@ namespace mv::rhi
 
 	void VulkanRHI::endFrame()
 	{
-		backend::VulkanFrameResource& frameResource = frameResources_[currentFrame_];
+		VulkanFrameResource& frameResource = frameResources_[currentFrame_];
 
-		backend::VulkanCommandBuffer& commandBuffer = commandPool_[(u32)EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer);
+		VulkanCommandBuffer& commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer);
 		VkCommandBuffer cmd = commandBuffer.commandBuffer();
 
 		rhi::TextureBarrier barrier
@@ -136,8 +135,8 @@ namespace mv::rhi
 
 	void VulkanRHI::clearRenderTarget(float clearColor[])
 	{
-		backend::VulkanFrameResource& frameResource = frameResources_[currentFrame_];
-		VkCommandBuffer commandBuffer = commandPool_[(u32)EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer).commandBuffer();
+		VulkanFrameResource& frameResource = frameResources_[currentFrame_];
+		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer).commandBuffer();
 		VkClearValue clearValue{};
 		clearValue.color.float32[0] = clearColor[0];
 		clearValue.color.float32[1] = clearColor[1];
@@ -172,21 +171,21 @@ namespace mv::rhi
 		vkCmdEndRendering(commandBuffer);
 	}
 
-	CommandBufferHandle VulkanRHI::allocateCommandBuffer(EQueueType queueType)
+	rhi::CommandBufferHandle VulkanRHI::allocateCommandBuffer(rhi::EQueueType queueType)
 	{
 		return commandPool_[(u32)queueType].allocate();
 	}
 
 	void VulkanRHI::createBackbuffer()
 	{
-		std::vector<TextureHandle> backbuffers;
+		std::vector<rhi::TextureHandle> backbuffers;
 		for (u32 i = 0; i < swapchain_.imageCount(); i++)
 		{
-			TextureHandle handle = (TextureHandle)images_.size();
+			rhi::TextureHandle handle = (rhi::TextureHandle)images_.size();
 			VkImage image = swapchain_.images()[i];
 			VkImageView view = swapchain_.views()[i];
 
-			images_.emplace_back(rhi::TextureDesc{}, image, view, backend::Allocation(), true);
+			images_.emplace_back(rhi::TextureDesc{}, image, view, Allocation(), true);
 
 			backbuffers.push_back(handle);
 		}
@@ -194,34 +193,34 @@ namespace mv::rhi
 		backbuffers_ = backbuffers;
 	}
 
-	BufferHandle VulkanRHI::createBuffer(const BufferDesc& desc)
+	rhi::BufferHandle VulkanRHI::createBuffer(const rhi::BufferDesc& desc)
 	{
 		for (auto& id : freeBufferList_)
 		{
 			const auto& d = buffers_[id].desc;
 			if (d.memoryType == desc.memoryType && d.size == desc.size)
 			{
-				BufferHandle handle = id;
+				rhi::BufferHandle handle = id;
 				id = freeBufferList_.back();
 				freeBufferList_.pop_back();
 				return handle;
 			}
 		}
 
-		BufferHandle handle = (BufferHandle)buffers_.size();
+		rhi::BufferHandle handle = (rhi::BufferHandle)buffers_.size();
 		VkBuffer buffer = VK_NULL_HANDLE;
-		backend::Allocation alloc{};
+		Allocation alloc{};
 
 		VkBufferCreateInfo bufferInfo{};
 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		bufferInfo.size = desc.size;
-		if (desc.usage == EBufferUsage::eVertex) bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-		if (desc.usage == EBufferUsage::eIndex) bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-		if (desc.usage == EBufferUsage::eUniform) bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-		if (desc.usage == EBufferUsage::eStorage) bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-		if (desc.usage == EBufferUsage::eIndirectArgs) bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-		if (desc.usage == EBufferUsage::eTransferSrc) bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-		if (desc.usage == EBufferUsage::eTransferDst) bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eVertex) == rhi::EBufferUsage::eVertex) bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eIndex) == rhi::EBufferUsage::eIndex) bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eUniform) == rhi::EBufferUsage::eUniform) bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eStorage) == rhi::EBufferUsage::eStorage) bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eIndirectArgs) == rhi::EBufferUsage::eIndirectArgs) bufferInfo.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eTransferSrc) == rhi::EBufferUsage::eTransferSrc) bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		if ((desc.usage & rhi::EBufferUsage::eTransferDst) == rhi::EBufferUsage::eTransferDst) bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 		if (vkCreateBuffer(device_.device(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 		{
@@ -235,24 +234,24 @@ namespace mv::rhi
 		buffers_.emplace_back(desc, buffer, alloc, false);
 		return handle;
 	}
-	TextureHandle VulkanRHI::createTexture(const TextureDesc& desc)
+	rhi::TextureHandle VulkanRHI::createTexture(const rhi::TextureDesc& desc)
 	{
 		for (auto& id : freeImageList_)
 		{
 			const auto& d = images_[id].desc;
 			if (d.memoryType == desc.memoryType && d.format == desc.format && d.width == desc.width && d.height == desc.height && d.depth == desc.depth)
 			{
-				TextureHandle handle = id;
+				rhi::TextureHandle handle = id;
 				id = freeImageList_.back();
 				freeImageList_.pop_back();
 				return handle;
 			}
 		}
 
-		TextureHandle handle = (TextureHandle)images_.size();
+		rhi::TextureHandle handle = (rhi::TextureHandle)images_.size();
 		VkImage image = VK_NULL_HANDLE;
 		VkImageView view = VK_NULL_HANDLE;
-		backend::Allocation alloc{};
+		Allocation alloc{};
 
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -301,56 +300,56 @@ namespace mv::rhi
 	}
 
 
-	void VulkanRHI::textureBarrier(CommandBufferHandle cmd, const TextureBarrier& barrier)
+	void VulkanRHI::textureBarrier(rhi::CommandBufferHandle cmd, const rhi::TextureBarrier& barrier)
 	{
-		backend::VulkanCommandBuffer& commandBuffer = commandPool_[(u32)EQueueType::eGraphics].getCommandBuffer(cmd);
+		VulkanCommandBuffer& commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd);
 
 		commandBuffer.pipelineBarrier(
-			backend::VulkanStateInfo{ backend::getPipelineStageFlags(barrier.before), backend::getAccessFlags(barrier.before), backend::getImageLayout(barrier.before) },
-			backend::VulkanStateInfo{ backend::getPipelineStageFlags(barrier.after), backend::getAccessFlags(barrier.after), backend::getImageLayout(barrier.after) },
+			VulkanStateInfo{ getPipelineStageFlags(barrier.before), getAccessFlags(barrier.before), getImageLayout(barrier.before) },
+			VulkanStateInfo{ getPipelineStageFlags(barrier.after), getAccessFlags(barrier.after), getImageLayout(barrier.after) },
 			images_[barrier.texture]);
 	}
 
-	void VulkanRHI::bufferBarrier(CommandBufferHandle cmd, const BufferBarrier& barrier)
+	void VulkanRHI::bufferBarrier(rhi::CommandBufferHandle cmd, const rhi::BufferBarrier& barrier)
 	{
-		const backend::VulkanCommandBuffer& commandBuffer = commandPool_[(u32)EQueueType::eGraphics].getCommandBuffer(cmd);
+		const VulkanCommandBuffer& commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd);
 	}
 
-	CommandBufferHandle VulkanRHI::getCurrentCommandBuffer() const
+	rhi::CommandBufferHandle VulkanRHI::getCurrentCommandBuffer() const
 	{
 		return frameResources_[currentFrame_].commandBuffer;
 	}
 
-	void VulkanRHI::freeImage(TextureHandle handle)
+	void VulkanRHI::freeImage(rhi::TextureHandle handle)
 	{
-		backend::VulkanImage& image = images_[handle];
+		VulkanImage& image = images_[handle];
 
 		if (image.imported) return;
 
 		memoryAllocator_[(u32)image.desc.memoryType].free(image.alloc);
 	}
 
-	void VulkanRHI::freeBuffer(BufferHandle handle)
+	void VulkanRHI::freeBuffer(rhi::BufferHandle handle)
 	{
-		backend::VulkanBuffer& buffer = buffers_[handle];
+		VulkanBuffer& buffer = buffers_[handle];
 
 		if (buffer.imported) return;
 
 		memoryAllocator_[(u32)buffer.desc.memoryType].free(buffer.alloc);
 	}
 
-	void VulkanRHI::releaseImage(TextureHandle handle)
+	void VulkanRHI::releaseImage(rhi::TextureHandle handle)
 	{
-		backend::VulkanImage& image = images_[handle];
+		VulkanImage& image = images_[handle];
 
 		if (image.imported) return;
 
 		freeImageList_.push_back(handle);
 	}
 
-	void VulkanRHI::releaseBuffer(BufferHandle handle)
+	void VulkanRHI::releaseBuffer(rhi::BufferHandle handle)
 	{
-		backend::VulkanBuffer& buffer = buffers_[handle];
+		VulkanBuffer& buffer = buffers_[handle];
 
 		if (buffer.imported) return;
 

@@ -1,11 +1,11 @@
 
-#include "rhi/vk/vulkan_command.h"
+#include "rhi/vk1_4/vulkan_command.h"
 
-#include "rhi/vk/vulkan_device.h"
-#include "rhi/vk/vulkan_pipeline.h"
-#include "rhi/vk/vulkan_resource.h"
+#include "rhi/vk1_4/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_pipeline.h"
+#include "rhi/vk1_4/vulkan_resource.h"
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	VkPipelineStageFlags getPipelineStageFlags(rhi::EResourceState state)
 	{
@@ -187,9 +187,10 @@ namespace mv::backend
 		std::shared_ptr<VulkanCommandBuffer> cmd = std::make_shared<VulkanCommandBuffer>();
 		cmd->initialize(device_->device(), commandPool_);
 
+		rhi::CommandBufferHandle handle = releaseArray_.size();
 		releaseArray_.push_back(cmd);
 
-		return nextHandleIndex_;
+		return handle;
 	}
 
 	VulkanCommandBuffer& VulkanCommandPool::getCommandBuffer(rhi::CommandBufferHandle handle) const

@@ -1,9 +1,9 @@
 ﻿
 
-#include "rhi/vk/vulkan_pipeline.h"
-#include "rhi/vk/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_pipeline.h"
+#include "rhi/vk1_4/vulkan_device.h"
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	void VulkanShader::initialize(VkDevice device, const rhi::ShaderDesc& desc)
 	{

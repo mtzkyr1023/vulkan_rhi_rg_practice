@@ -1,7 +1,7 @@
 #ifndef _MV_PIPELINE_H_
 #define _MV_PIPELINE_H_
 
-#include "vector"
+#include <vector>
 
 #include "util/types.h"
 

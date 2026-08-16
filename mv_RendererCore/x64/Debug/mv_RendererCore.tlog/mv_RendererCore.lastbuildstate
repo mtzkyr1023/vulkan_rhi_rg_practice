@@ -1,2 +1,2 @@
-PlatformToolSet=v145:VCToolArchitecture=Native64Bit:VCToolsVersion=14.50.35717:VCServicingVersionCompilers=14.50.35729:TargetPlatformVersion=10.0.26100.0:
-Debug|x64|E:\workspace\vulkan_rhi_rg_practice\|
+PlatformToolSet=v145:VCToolArchitecture=Native64Bit:VCToolsVersion=14.51.36231:VCServicingVersionATL=14.51.36244:VCServicingVersionCrtHeaders=14.51.36244:VCServicingVersionCompilers=14.51.36252:TargetPlatformVersion=10.0.26100.0:
+Debug|x64|C:\work\vulkan_rhi_rg_practice\|

@@ -1,9 +1,9 @@
 
-#include "rhi/vk/vulkan_frame_resource.h"
-#include "rhi/vk/vulkan_device.h"
-#include "rhi/vk/vulkan_command.h"
+#include "rhi/vk1_4/vulkan_frame_resource.h"
+#include "rhi/vk1_4/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_command.h"
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	void VulkanFrameResource::initialize(VulkanDevice* device, VulkanCommandPool* commandPool)
 	{

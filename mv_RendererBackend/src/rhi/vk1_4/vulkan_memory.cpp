@@ -1,9 +1,9 @@
-#include "rhi/vk/vulkan_memory.h"
-#include "rhi/vk/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_memory.h"
+#include "rhi/vk1_4/vulkan_device.h"
 
-#include "cassert"
+#include <cassert>
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	static const VkMemoryPropertyFlags MemoryTypeTable[] =
 	{

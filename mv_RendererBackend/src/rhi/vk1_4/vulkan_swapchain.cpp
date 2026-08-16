@@ -1,8 +1,8 @@
 
-#include "rhi/vk/vulkan_swapchain.h"
-#include "rhi/vk/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_swapchain.h"
+#include "rhi/vk1_4/vulkan_device.h"
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	void VulkanSwapchain::initialize(VulkanDevice* device, void* hwnd)
 	{

@@ -1,7 +1,7 @@
 
-#include "rhi/vk/vulkan_device.h"
+#include "rhi/vk1_4/vulkan_device.h"
 
-namespace mv::backend
+namespace mv::backend::vk1_4
 {
 	VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
 		VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -36,7 +36,7 @@ namespace mv::backend
 	{
 		VkApplicationInfo app{};
 		app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		app.apiVersion = VK_API_VERSION_1_4;
+		app.apiVersion = VK_API_VERSION_1_3;
 
 		const char* extensions[] = {
 			VK_KHR_SURFACE_EXTENSION_NAME,
@@ -131,6 +131,23 @@ namespace mv::backend
 		}
 
 		vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &memProps_);
+
+		VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+			.pNext = nullptr,
+			.dynamicRendering = VK_FALSE,
+		};
+
+		VkPhysicalDeviceFeatures2 features2
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+			.pNext = &dynamicRenderingFeatures,
+		};
+
+		vkGetPhysicalDeviceFeatures2(physicalDevice_, &features2);
+
+		int a = 0;
 	}
 
 	void VulkanDevice::createLogicalDevice()

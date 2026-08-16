@@ -21,32 +21,46 @@
   <ItemGroup>
     <ClCompile Include="src\memory\tlsf_allocator.cpp" />
     <ClCompile Include="src\rhi\commandbuffer.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_command.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_descriptor.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_device.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_memory.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_rhi.cpp" />
+    <ClCompile Include="src\rhi\dx12_0\dx_swapchain.cpp" />
     <ClCompile Include="src\rhi\rhi.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_command.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_descriptor.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_device.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_frame_resource.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_memory.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_pipeline.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_resource.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_rhi.cpp" />
-    <ClCompile Include="src\rhi\vk\vulkan_swapchain.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_command.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_descriptor.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_device.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_frame_resource.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_memory.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_pipeline.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_resource.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_rhi.cpp" />
+    <ClCompile Include="src\rhi\vk1_4\vulkan_swapchain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\memory\tlsf_allocator.h" />
     <ClInclude Include="include\rhi\commandbuffer.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_command.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_descriptor.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_device.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_frame_resource.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_memory.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_resource.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_rhi.h" />
+    <ClInclude Include="include\rhi\dx12_0\dx_swapchain.h" />
     <ClInclude Include="include\rhi\pipeline.h" />
     <ClInclude Include="include\rhi\resource.h" />
     <ClInclude Include="include\rhi\rhi.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_command.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_descriptor.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_device.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_frame_resource.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_memory.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_pipeline.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_resource.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_rhi.h" />
-    <ClInclude Include="include\rhi\vk\vulkan_swapchain.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_command.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_descriptor.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_device.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_frame_resource.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_memory.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_pipeline.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_resource.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_rhi.h" />
+    <ClInclude Include="include\rhi\vk1_4\vulkan_swapchain.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>

@@ -1,7 +1,7 @@
 #ifndef _MV_TYPES_H_
 #define _MV_TYPES_H_
 
-#include "type_traits"
+#include <type_traits>
 
 namespace mv
 {
@@ -45,6 +45,12 @@ namespace mv
 
 	template<typename T, type_traits::concept_t<enum_concept::has_and_or_operators<T>::value> = nullptr>
 	constexpr T operator&(T lhs, T rhs) { return static_cast<T>(detail::underlying_cast(lhs) & detail::underlying_cast(rhs)); }
+	template<typename T, type_traits::concept_t<enum_concept::has_and_or_operators<T>::value> = nullptr>
+	constexpr T operator&(const T lhs, T rhs) { return static_cast<T>(detail::underlying_cast(lhs) & detail::underlying_cast(rhs)); }
+	template<typename T, type_traits::concept_t<enum_concept::has_and_or_operators<T>::value> = nullptr>
+	constexpr T operator&(T lhs, const T rhs) { return static_cast<T>(detail::underlying_cast(lhs) & detail::underlying_cast(rhs)); }
+	template<typename T, type_traits::concept_t<enum_concept::has_and_or_operators<T>::value> = nullptr>
+	constexpr T operator&(const T lhs, const T rhs) { return static_cast<T>(detail::underlying_cast(lhs) & detail::underlying_cast(rhs)); }
 	template<typename T, type_traits::concept_t<enum_concept::has_and_or_operators<T>::value> = nullptr>
 	T& operator&=(T& lhs, T rhs) { lhs = lhs & rhs; return lhs; }
 
