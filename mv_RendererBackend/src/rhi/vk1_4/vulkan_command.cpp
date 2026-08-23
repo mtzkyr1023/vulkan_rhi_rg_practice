@@ -62,7 +62,9 @@ namespace mv::backend::vk1_4
 		case rhi::EResourceState::eVertexBuffer: return VK_IMAGE_LAYOUT_UNDEFINED;
 		case rhi::EResourceState::eIndexBuffer: return VK_IMAGE_LAYOUT_UNDEFINED;
 		case rhi::EResourceState::eConstantBuffer: return VK_IMAGE_LAYOUT_UNDEFINED;
-		case rhi::EResourceState::eShaderRead: return VK_IMAGE_LAYOUT_GENERAL;
+		// Sampled image descriptors are written with SHADER_READ_ONLY_OPTIMAL, and the
+		// layout a descriptor declares has to be the layout the image is actually in.
+		case rhi::EResourceState::eShaderRead: return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		case rhi::EResourceState::eShaderWrite: return VK_IMAGE_LAYOUT_GENERAL;
 		case rhi::EResourceState::eRenderTarget: return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		case rhi::EResourceState::eDepthStencilWrite: return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;

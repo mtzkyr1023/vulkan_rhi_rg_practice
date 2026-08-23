@@ -1,1 +1,12 @@
-C:\work\vulkan_rhi_rg_practice\mv_RendererCore\src\rg\render_graph.cpp;C:\work\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\render_graph.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\rg\render_graph.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\render_graph.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\asset\gltf_loader.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\gltf_loader.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\material\material_system.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\material_system.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\material\pipeline.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\pipeline.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\ui\imgui_renderer.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_renderer.obj
+E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\src\virtual_texture\virtual_texture.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\virtual_texture.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\imgui.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\imgui_draw.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_draw.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\imgui_tables.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_tables.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\imgui_widgets.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_widgets.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\imgui_demo.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_demo.obj
+E:\workspace_f\vulkan_rhi_rg_practice\thirdparty\imgui\backends\imgui_impl_win32.cpp;E:\workspace_f\vulkan_rhi_rg_practice\mv_RendererCore\x64\Debug\imgui_impl_win32.obj

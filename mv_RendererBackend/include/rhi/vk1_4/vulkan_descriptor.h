@@ -41,7 +41,7 @@ namespace mv
 
 				void beginFrame(u32 frameIndex);
 
-				VkDescriptorSet allocate(VulkanBindGroupLayout* layout);
+				VkDescriptorSet allocate(const VulkanBindGroupLayout* layout);
 
 			private:
 				DescriptorPoolWrapper createPool(u32 maxSets);

@@ -27,6 +27,7 @@ namespace mv
 				void deinitialize(DxDevice* device, DxCommandPool* commandPool);
 
 				rhi::CommandBufferHandle commandBuffer = INVALID_HANDLE;
+				wrl::ComPtr<ID3D12CommandAllocator> allocator;
 				wrl::ComPtr<ID3D12Fence> inFlightFence;
 
 				rhi::TextureHandle backbuffer = INVALID_HANDLE;

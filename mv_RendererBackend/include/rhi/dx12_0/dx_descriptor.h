@@ -39,12 +39,21 @@ namespace mv
 				};
 
 			public:
-				void initialize(DxDevice* device, u32 framesInFlight, D3D12_DESCRIPTOR_HEAP_TYPE type, bool gloabl = false);
+				void initialize(DxDevice* device, u32 framesInFlight, u32 maxDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type, bool global = false);
 				void deinitialize();
 
 				void beginFrame(u32 frameIndex);
 
 				u32 allocate();
+
+				// A descriptor table must point at a contiguous run, so a bind group's
+				// descriptors have to be reserved in one go rather than one at a time.
+				u32 allocateRange(u32 count);
+
+				D3D12_CPU_DESCRIPTOR_HANDLE getCpuHandle(u32 index) const;
+				D3D12_GPU_DESCRIPTOR_HANDLE getGpuHandle(u32 index) const;
+
+				ID3D12DescriptorHeap* heap() const;
 
 			private:
 				DescriptorHeapWrapper createRtvHeap(u32 maxDescs);
@@ -58,6 +67,8 @@ namespace mv
 				D3D12_DESCRIPTOR_HEAP_TYPE heapType_;
 
 				u32 currentFrame_ = 0;
+				u32 maxDescs_ = 0;
+				bool global_ = false;
 
 				DxDevice* device_;
 			};

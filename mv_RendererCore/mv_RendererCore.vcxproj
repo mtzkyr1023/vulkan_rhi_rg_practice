@@ -19,12 +19,29 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\asset\gltf_loader.h" />
+    <ClInclude Include="include\material\material_system.h" />
+    <ClInclude Include="include\material\pipeline.h" />
+    <ClInclude Include="include\util\math.h" />
     <ClInclude Include="include\renderer.h" />
     <ClInclude Include="include\rg\render_graph.h" />
+    <ClInclude Include="include\ui\imgui_renderer.h" />
     <ClInclude Include="include\util\types.h" />
+    <ClInclude Include="include\virtual_texture\virtual_texture.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\rg\render_graph.cpp" />
+    <ClCompile Include="src\asset\gltf_loader.cpp" />
+    <ClCompile Include="src\material\material_system.cpp" />
+    <ClCompile Include="src\material\pipeline.cpp" />
+    <ClCompile Include="src\ui\imgui_renderer.cpp" />
+    <ClCompile Include="src\virtual_texture\virtual_texture.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\thirdparty\imgui\backends\imgui_impl_win32.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\mv_RendererBackend\mv_RendererBackend.vcxproj">
@@ -127,7 +144,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(ProjectDir)\include\;$(SolutionDir)\mv_RendererBackend\include\;$(VULKAN_SDK)\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\;$(SolutionDir)\mv_RendererBackend\include\;$(SolutionDir)thirdparty\imgui\;$(SolutionDir)thirdparty\cgltf\;$(SolutionDir)thirdparty\stb\;$(VULKAN_SDK)\include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

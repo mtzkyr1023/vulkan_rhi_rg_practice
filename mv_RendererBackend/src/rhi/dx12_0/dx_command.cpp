@@ -11,6 +11,10 @@ namespace mv::backend::dx12_0
 			return;
 
 		device->device()->CreateCommandList(0, pool->type(), pool->allocator(), nullptr, IID_PPV_ARGS(&commandList_));
+
+		// Command lists are created in the recording state; close it immediately so the
+		// first real use (which Resets it against the owning frame's own allocator) is valid.
+		commandList_->Close();
 	}
 
 	void DxCommandList::deinitialize()

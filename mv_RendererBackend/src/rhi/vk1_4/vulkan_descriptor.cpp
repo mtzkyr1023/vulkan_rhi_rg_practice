@@ -11,9 +11,17 @@ namespace mv::backend::vk1_4
 {
 	void VulkanDescriptorAllocator::initialize(VulkanDevice* device, u32 framesInFlight)
 	{
+		device_ = device;
+
 		frames_.resize(framesInFlight);
 
-		device_ = device;
+		// allocate() indexes frame.pools[currentPool] before checking anything, so every
+		// frame has to start with one pool already present.
+		for (auto& frame : frames_)
+		{
+			frame.pools.push_back(createPool(1000));
+			frame.currentPool = 0;
+		}
 	}
 
 	void VulkanDescriptorAllocator::deinitialize()
@@ -41,7 +49,7 @@ namespace mv::backend::vk1_4
 			pool.usedSets = 0;
 		}
 	}
-	VkDescriptorSet VulkanDescriptorAllocator::allocate(VulkanBindGroupLayout* layout)
+	VkDescriptorSet VulkanDescriptorAllocator::allocate(const VulkanBindGroupLayout* layout)
 	{
 		auto& frame = frames_[currentFrame_];
 
@@ -54,7 +62,7 @@ namespace mv::backend::vk1_4
 				layout->layout(),
 			};
 
-			VkDescriptorSetAllocateInfo alloc;
+			VkDescriptorSetAllocateInfo alloc{};
 			alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			alloc.descriptorPool = pool.pool;
 			alloc.descriptorSetCount = 1;
@@ -93,7 +101,9 @@ namespace mv::backend::vk1_4
 		std::vector<VkDescriptorPoolSize> sizes =
 		{
 			{ VK_DESCRIPTOR_TYPE_SAMPLER, maxSets },
-			{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, maxSets },
+			// A single bindless set declares thousands of sampled image descriptors on its
+			// own, so this pool cannot be sized per set like the others.
+			{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, maxSets + 8192 },
 			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, maxSets },
 			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, maxSets },
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, maxSets },
@@ -102,11 +112,14 @@ namespace mv::backend::vk1_4
 			{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, maxSets },
 		};
 		
-		VkDescriptorPoolCreateInfo info;
+		VkDescriptorPoolCreateInfo info{};
 		info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		info.maxSets = maxSets;
 		info.poolSizeCount = static_cast<uint32_t>(sizes.size());
 		info.pPoolSizes = sizes.data();
+		// A set whose layout allows update-after-bind can only be allocated from a pool
+		// that allows it too, and the flag is harmless on the sets that do not use it.
+		info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 
 		vkCreateDescriptorPool(device_->device(), &info, nullptr, &wrapper.pool);
 

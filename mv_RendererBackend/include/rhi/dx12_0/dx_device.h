@@ -31,6 +31,12 @@ namespace mv
 				ID3D12CommandQueue* copyQueue() const { return copyQueue_.Get(); }
 				ID3D12CommandQueue* computeQueue() const { return computeQueue_.Get(); }
 
+				// Tier 1 forces buffers, RT/DS textures and other textures into separate
+				// heaps; tier 2 lets one heap hold all of them.
+				D3D12_RESOURCE_HEAP_TIER resourceHeapTier() const { return resourceHeapTier_; }
+
+				bool supportsBindless() const { return supportsBindless_; }
+
 			private:
 				wrl::ComPtr<IDXGIFactory6> factory_;
 				wrl::ComPtr<IDXGIAdapter1> adapter_;
@@ -41,6 +47,14 @@ namespace mv
 				wrl::ComPtr<ID3D12CommandQueue> computeQueue_;
 
 				wrl::ComPtr<ID3D12Debug> debugController_;
+
+				wrl::ComPtr<ID3D12Fence> idleFence_;
+				UINT64 idleFenceValue_ = 0;
+
+				D3D12_RESOURCE_HEAP_TIER resourceHeapTier_ = D3D12_RESOURCE_HEAP_TIER_1;
+				D3D12_RESOURCE_BINDING_TIER resourceBindingTier_ = D3D12_RESOURCE_BINDING_TIER_1;
+
+				bool supportsBindless_ = false;
 			};
 		}
 	}

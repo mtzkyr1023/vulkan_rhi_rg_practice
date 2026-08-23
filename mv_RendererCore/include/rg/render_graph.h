@@ -101,6 +101,10 @@ namespace mv
 
 			rhi::TextureHandle physical;
 
+			// Brought in by the caller rather than created by the graph, so the graph must
+			// not free it when its last use goes by.
+			bool imported = false;
+
 			ERGTextureUsage initialState = ERGTextureUsage::Undefined;
 			ERGTextureUsage lastState = ERGTextureUsage::Undefined;
 

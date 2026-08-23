@@ -41,6 +41,11 @@ namespace mv
 
 				const VkPhysicalDeviceMemoryProperties& memProps() { return memProps_; }
 
+			bool supportsBindless() const { return supportsBindless_; }
+
+			// 1.0 when the device does not support anisotropic filtering at all.
+			f32 maxSamplerAnisotropy() const { return maxSamplerAnisotropy_; }
+
 			private:
 				void createInstance();
 				void pickPhysicalDevice();
@@ -57,7 +62,11 @@ namespace mv
 
 				VkPhysicalDeviceMemoryProperties memProps_;
 
-				u32 graphicsQueueFamilyIndex_ = -1;
+				bool supportsBindless_ = false;
+
+			f32 maxSamplerAnisotropy_ = 1.0f;
+
+			u32 graphicsQueueFamilyIndex_ = -1;
 				u32 computeQueueFamilyIndex_ = -1;
 				u32 transferQueueFamilyIndex_ = -1;
 			};

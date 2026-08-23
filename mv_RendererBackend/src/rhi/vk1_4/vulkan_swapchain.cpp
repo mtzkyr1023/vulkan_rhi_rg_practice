@@ -85,6 +85,7 @@ namespace mv::backend::vk1_4
 		}
 
 		extent_ = extent;
+		format_ = format.format;
 
 		VkSwapchainCreateInfoKHR swapchainCI{};
 		swapchainCI.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

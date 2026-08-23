@@ -1,6 +1,8 @@
 
 #include "rhi/vk1_4/vulkan_device.h"
 
+#include <cstdio>
+
 namespace mv::backend::vk1_4
 {
 	VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
@@ -132,22 +134,35 @@ namespace mv::backend::vk1_4
 
 		vkGetPhysicalDeviceMemoryProperties(physicalDevice_, &memProps_);
 
-		VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-			.pNext = nullptr,
-			.dynamicRendering = VK_FALSE,
-		};
+		// Bindless needs descriptor indexing: an unbounded array that can be indexed with a
+		// value that varies across a wave, updated after binding, and only partially filled.
+		VkPhysicalDeviceVulkan12Features supported12{};
+		supported12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 
-		VkPhysicalDeviceFeatures2 features2
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-			.pNext = &dynamicRenderingFeatures,
-		};
+		VkPhysicalDeviceFeatures2 features2{};
+		features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		features2.pNext = &supported12;
 
 		vkGetPhysicalDeviceFeatures2(physicalDevice_, &features2);
 
-		int a = 0;
+		supportsBindless_ =
+			supported12.runtimeDescriptorArray &&
+			supported12.shaderSampledImageArrayNonUniformIndexing &&
+			supported12.descriptorBindingPartiallyBound &&
+			supported12.descriptorBindingSampledImageUpdateAfterBind &&
+			supported12.descriptorBindingVariableDescriptorCount;
+
+		VkPhysicalDeviceProperties props{};
+		vkGetPhysicalDeviceProperties(physicalDevice_, &props);
+
+		maxSamplerAnisotropy_ = features2.features.samplerAnisotropy ? props.limits.maxSamplerAnisotropy : 1.0f;
+
+		char message[512];
+		sprintf_s(message,
+			"Vulkan device: %s\n  bindless (descriptor indexing): %s\n",
+			props.deviceName,
+			supportsBindless_ ? "yes" : "NO");
+		OutputDebugStringA(message);
 	}
 
 	void VulkanDevice::createLogicalDevice()
@@ -193,18 +208,42 @@ namespace mv::backend::vk1_4
 		VkPhysicalDeviceDynamicRenderingFeatures dynamicRendering{};
 		dynamicRendering.sType =
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-
-		VkPhysicalDeviceFeatures2 features2{};
-		features2.sType =
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-		features2.pNext = &dynamicRendering;
-
-		vkGetPhysicalDeviceFeatures2(
-			physicalDevice_,
-			&features2);
-
 		dynamicRendering.dynamicRendering = VK_TRUE;
-		ci.pNext = &dynamicRendering;
+
+		// Descriptor indexing is opt-in, unlike D3D12 where an unbounded table only needs a
+		// high enough binding tier.
+		VkPhysicalDeviceVulkan12Features features12{};
+		features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+		features12.pNext = &dynamicRendering;
+
+		if (supportsBindless_)
+		{
+			features12.runtimeDescriptorArray = VK_TRUE;
+			features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+			features12.descriptorBindingPartiallyBound = VK_TRUE;
+			features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+			features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+		}
+
+		// The shaders are compiled with D3D packing so their structs match the CPU ones
+		// byte for byte. That produces vectors straddling 16-byte boundaries, which Vulkan
+		// only accepts under scalar block layout.
+		features12.scalarBlockLayout = VK_TRUE;
+
+		// Anisotropic filtering is an optional core feature and has to be asked for.
+		VkPhysicalDeviceFeatures2 enabledFeatures{};
+		enabledFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		enabledFeatures.pNext = &features12;
+		enabledFeatures.features.samplerAnisotropy = VK_TRUE;
+		// Reading SV_PrimitiveID from a fragment shader compiles to SPIR-V that declares
+		// the Geometry capability, which this feature gates even though no geometry shader
+		// is involved. The visibility buffer pass needs it.
+		enabledFeatures.features.geometryShader = VK_TRUE;
+		// The streaming feedback buffer is written by a fragment shader, which D3D12 allows
+		// unconditionally but Vulkan gates behind this.
+		enabledFeatures.features.fragmentStoresAndAtomics = VK_TRUE;
+
+		ci.pNext = &enabledFeatures;
 
 		vkCreateDevice(physicalDevice_, &ci, nullptr, &device_);
 

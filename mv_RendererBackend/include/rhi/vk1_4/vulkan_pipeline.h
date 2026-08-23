@@ -1,6 +1,9 @@
 #ifndef _MV_VULKAN_PIPELINE_H_
 #define _MV_VULKAN_PIPELINE_H_
 
+#include <string>
+#include <vector>
+
 #include <vulkan/vulkan.h>
 
 #include "util/types.h"
@@ -17,6 +20,9 @@ namespace mv
 
 			class VulkanDevice;
 
+			VkFormat toVkFormat(rhi::ETextureFormat format);
+			rhi::ETextureFormat fromVkFormat(VkFormat format);
+
 			class VulkanShader
 			{
 			public:
@@ -25,13 +31,13 @@ namespace mv
 
 				VkShaderModule module() const { return module_; }
 				rhi::EShaderType type() const { return type_; }
-
+				const char* entryPoint() const { return entryPoint_.c_str(); }
 
 			private:
 				VkShaderModule module_;
 				rhi::EShaderType type_;
 
-
+				std::string entryPoint_;
 			};
 
 			class VulkanShaderManager : public rhi::IShaderManager
@@ -58,17 +64,22 @@ namespace mv
 
 				VkDescriptorSetLayout layout() const { return layout_; }
 
+				// Sets allocated from this layout must come from an update-after-bind pool.
+				bool updateAfterBind() const { return updateAfterBind_; }
+
 			private:
 				VkDescriptorSetLayout layout_;
+
+				bool updateAfterBind_ = false;
 			};
 
-			class VulkanBindGroupLayoutManager
+			class VulkanBindGroupLayoutManager : public rhi::IBindGroupLayoutManager
 			{
 			public:
 				void initialize(VulkanDevice* device);
 				void deinitialize();
 
-				rhi::BindGroupLayoutHandle createBindGroupLayout(const rhi::BindGroupLayoutDesc& desc);
+				rhi::BindGroupLayoutHandle createBindGroupLayout(const rhi::BindGroupLayoutDesc& desc) override;
 
 				const VulkanBindGroupLayout& layout(rhi::BindGroupLayoutHandle handle) const { return layouts_[handle]; }
 
@@ -81,10 +92,10 @@ namespace mv
 			class VulkanPipelineLayout
 			{
 			public:
-				void initialize(VkDevice device, const std::vector<VkDescriptorSetLayout>& layouts);
+				void initialize(VkDevice device, const std::vector<VkDescriptorSetLayout>& layouts, u32 pushConstantSize);
 				void deinitialize(VkDevice device);
 
-				VkPipelineLayout layout() { return layout_; }
+				VkPipelineLayout layout() const { return layout_; }
 
 			private:
 				VkPipelineLayout layout_;

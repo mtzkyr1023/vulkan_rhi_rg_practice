@@ -25,6 +25,30 @@ namespace mv
 			eNum,
 		};
 
+		struct RenderPassColorTarget
+		{
+			TextureHandle texture = INVALID_HANDLE;
+
+			bool clear = true;
+			f32 clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		};
+
+		struct RenderPassDepthTarget
+		{
+			TextureHandle texture = INVALID_HANDLE;
+
+			bool clear = true;
+			f32 clearDepth = 1.0f;
+		};
+
+		struct RenderPassDesc
+		{
+			std::vector<RenderPassColorTarget> colorTargets;
+
+			// Optional: leave the texture INVALID_HANDLE for a colour-only pass.
+			RenderPassDepthTarget depthTarget;
+		};
+
 		class ICommandPool
 		{
 		public:

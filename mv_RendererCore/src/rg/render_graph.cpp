@@ -218,6 +218,7 @@ namespace mv::rg
 			.handle = handle,
 			.desc = RGTextureDesc{},
 			.physical = rhiHandle,
+			.imported = true,
 			.initialState = initialState,
 			.lastState = initialState,
 		};
@@ -297,9 +298,12 @@ namespace mv::rg
 
 			pass.pass->execute(context);
 
+			// Only resources the graph allocated are released here. An imported texture is
+			// owned by the caller and lives across frames; freeing it destroys a resource
+			// this very command list still references.
 			for (auto& texture : textures_)
 			{
-				if (texture.lastUseHandle == pass.handle)
+				if (!texture.imported && texture.lastUseHandle == pass.handle)
 				{
 					rhi_->freeImage(texture.physical);
 				}

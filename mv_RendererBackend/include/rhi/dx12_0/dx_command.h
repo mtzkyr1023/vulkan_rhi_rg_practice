@@ -32,8 +32,16 @@ namespace mv
 
 				ID3D12GraphicsCommandList* commandList() { return commandList_.Get(); }
 
+				// Setting a root signature resets every root parameter binding, so it must
+				// only be re-set when it actually changes. Reset() clears all command list
+				// state, so this is cleared alongside it.
+				ID3D12RootSignature* boundRootSignature() const { return boundRootSignature_; }
+				void setBoundRootSignature(ID3D12RootSignature* rootSignature) { boundRootSignature_ = rootSignature; }
+
 			private:
 				wrl::ComPtr<ID3D12GraphicsCommandList> commandList_;
+
+				ID3D12RootSignature* boundRootSignature_ = nullptr;
 			};
 
 			class DxCommandPool : public rhi::ICommandPool

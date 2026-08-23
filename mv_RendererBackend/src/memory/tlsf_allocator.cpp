@@ -38,15 +38,37 @@ namespace mv::memory
 		insert(header);
 	}
 
+	u64 TLSF::requiredPoolSize(u64 size, u64 alignment)
+	{
+		if (alignment < MIN_ALIGNMENT)
+			alignment = MIN_ALIGNMENT;
+
+		// A free block's offset carries no alignment guarantee, so the search has to allow
+		// for the padding that will be trimmed off its front: at most alignment - 1 bytes.
+		u64 search_size = alignUp(size, MIN_ALIGNMENT) + alignment - 1;
+
+		// mapping() rounds down, so a bucket's blocks can be smaller than what was asked
+		// for. Rounding the request up to the bucket boundary first makes every block in
+		// the selected bucket a valid candidate.
+		if (search_size >= SL_SIZE)
+		{
+			const u64 f = 63 - std::countl_zero(search_size);
+			search_size = alignUp(search_size, 1ull << (f - SL_BITS));
+		}
+
+		return search_size;
+	}
+
 	Block* TLSF::allocate(u64 size, u64 alignment)
 	{
 		if (alignment < MIN_ALIGNMENT)
 			alignment = MIN_ALIGNMENT;
 
-		u64 aligned_size = alignUp(size, alignment);
+		const u64 aligned_size = alignUp(size, MIN_ALIGNMENT);
+		const u64 search_size = requiredPoolSize(size, alignment);
 
 		u64 fl, sl;
-		mapping(aligned_size, fl, sl);
+		mapping(search_size, fl, sl);
 
 		u64 sl_map = sl_bitmap[fl] & (~0ULL << sl);
 		if (!sl_map)
@@ -60,8 +82,33 @@ namespace mv::memory
 		}
 		sl = std::countr_zero(sl_map);
 		Block* block = free_list[fl][sl];
+		if (!block)
+			return nullptr;
 
 		remove(block);
+
+		// Trim the misaligned head into its own free block so the payload starts aligned.
+		const u64 pad = alignUp(block->offset, alignment) - block->offset;
+		if (pad > 0)
+		{
+			split(block, pad);
+
+			// split() leaves the tail on the free list and the head off it; we want the
+			// opposite, since the tail is the part being handed out.
+			Block* rest = block->next_phys;
+			remove(rest);
+
+			block->free = true;
+			insert(block);
+
+			block = rest;
+		}
+
+		if (block->size < aligned_size)
+		{
+			insert(block);
+			return nullptr;
+		}
 
 		split(block, aligned_size);
 
@@ -87,6 +134,10 @@ namespace mv::memory
 		mapping(b->size, fl, sl);
 
 		b->next_free = free_list[fl][sl];
+		// The new head has nothing before it. Leaving a stale prev_free here makes a later
+		// remove() write through it and corrupt an unrelated list.
+		b->prev_free = nullptr;
+
 		if (b->next_free)
 			b->next_free->prev_free = b;
 
@@ -111,10 +162,13 @@ namespace mv::memory
 			free_list[fl][sl] = b->next_free;
 
 		if (!free_list[fl][sl])
-			sl_bitmap[fl] &= ~(1 << sl);
+			sl_bitmap[fl] &= ~(1ull << sl);
 
 		if (!sl_bitmap[fl])
-			fl_bitmap &= ~(1 << fl);
+			fl_bitmap &= ~(1ull << fl);
+
+		b->prev_free = nullptr;
+		b->next_free = nullptr;
 	}
 
 	Block* TLSF::merge(Block* b)
@@ -124,15 +178,28 @@ namespace mv::memory
 		{
 			remove(next);
 			b->size += next->size;
-		}
 
-		pool.free(next);
+			// The absorbed block leaves the physical list before it is recycled; skipping
+			// this leaves b->next_phys dangling at a block handed back to the pool.
+			b->next_phys = next->next_phys;
+			if (b->next_phys)
+				b->next_phys->prev_phys = b;
+
+			pool.free(next);
+		}
 
 		Block* prev = b->prev_phys;
 		if (prev && prev->free)
 		{
 			remove(prev);
 			prev->size += b->size;
+
+			prev->next_phys = b->next_phys;
+			if (prev->next_phys)
+				prev->next_phys->prev_phys = prev;
+
+			pool.free(b);
+
 			return prev;
 		}
 
@@ -163,8 +230,8 @@ namespace mv::memory
 			new_block->size = b->size - size;
 			new_block->prev_phys = b;
 			new_block->next_phys = b->next_phys;
-			new_block->prev_free = b;
-			new_block->next_free = b->next_free;
+			new_block->prev_free = nullptr;
+			new_block->next_free = nullptr;
 			new_block->free = true;
 			b->size = size;
 			b->next_phys = new_block;

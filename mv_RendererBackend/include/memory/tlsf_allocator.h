@@ -52,6 +52,11 @@ namespace mv
 				for (void* c : chunks) ::operator delete(c);
 			}
 
+			// Copying would duplicate ownership of the chunks and double free them, and the
+			// blocks handed out point into those chunks. Hold pools by pointer instead.
+			BlockPool(const BlockPool&) = delete;
+			BlockPool& operator=(const BlockPool&) = delete;
+
 			Block* allocate()
 			{
 				if (!head)
@@ -93,9 +98,23 @@ namespace mv
 			TLSF();
 			~TLSF();
 
+			// The free lists and block links point into this instance's own BlockPool, so a
+			// TLSF must stay put once it holds allocations.
+			TLSF(const TLSF&) = delete;
+			TLSF& operator=(const TLSF&) = delete;
+
 			void initialize(u64 size);
 
 			Block* allocate(u64 size, u64 alignment);
+
+			// The smallest pool that allocate() is guaranteed to satisfy this request from.
+			//
+			// allocate() rounds a request up to its bucket boundary so that every block in
+			// the bucket it lands on is a valid candidate, which is what keeps the search
+			// O(1). The rounding can add most of a bucket, so a pool created to hold one
+			// large allocation has to be sized by the same rule or the search walks straight
+			// past the only block in it.
+			static u64 requiredPoolSize(u64 size, u64 alignment);
 
 			void free(Block* block);
 

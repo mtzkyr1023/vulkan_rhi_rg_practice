@@ -69,6 +69,8 @@ namespace mv
 
 				VulkanCommandBuffer& getCommandBuffer(rhi::CommandBufferHandle handle) const;
 
+				VkCommandPool commandPool() const { return commandPool_; }
+
 			private:
 				virtual rhi::CommandBufferHandle createCommandBuffer() override;
 

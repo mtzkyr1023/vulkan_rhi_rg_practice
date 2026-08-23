@@ -47,6 +47,13 @@ namespace mv
 				D3D12_CPU_DESCRIPTOR_HANDLE cpu;
 				D3D12_GPU_DESCRIPTOR_HANDLE gpu;
 
+				// Only populated for depth-stencil textures.
+				D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
+
+				// Only populated for colour attachments. Kept apart from `cpu` because a
+				// render target that is also sampled needs both an RTV and an SRV.
+				D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+
 				bool imported = false;
 			};
 		}
