@@ -26,6 +26,7 @@ namespace mv
 			public:
 				void initialize(void* hwnd) override;
 				void deinitialize() override;
+				void resize(u32 width, u32 height) override;
 
 				void waitIdle() override;
 
@@ -41,6 +42,7 @@ namespace mv
 				void setScissor(rhi::CommandBufferHandle cmd, s32 x, s32 y, u32 width, u32 height) override;
 
 				void draw(rhi::CommandBufferHandle cmd, u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) override;
+				void drawIndirect(rhi::CommandBufferHandle cmd, rhi::BufferHandle args, u64 offset) override;
 
 				rhi::ETextureFormat backbufferFormat() const override;
 
@@ -63,6 +65,17 @@ namespace mv
 
 				void bindBindGroup(rhi::CommandBufferHandle cmd, rhi::PipelineLayoutHandle layout, u32 setIndex, rhi::BindGroupHandle group) override;
 				void updateBindGroupTexture(rhi::BindGroupHandle group, u32 binding, u32 arrayIndex, rhi::TextureHandle texture, u32 baseMip, u32 mipCount) override;
+
+				void updateBindGroupBuffer(rhi::BindGroupHandle group, u32 binding, rhi::BufferHandle buffer, u64 offset, u32 stride, u32 count) override;
+				void updateBindGroupStorageTexture(rhi::BindGroupHandle group, u32 binding, u32 arrayIndex, rhi::TextureHandle texture, u32 mipLevel) override;
+
+				rhi::CommandBufferHandle beginImmediateCommands() override;
+				void endImmediateCommands(rhi::CommandBufferHandle cmd) override;
+
+				rhi::PipelineHandle createComputePipeline(const rhi::ComputePipelineDesc& desc) override;
+				void bindComputePipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline) override;
+				void dispatch(rhi::CommandBufferHandle cmd, u32 groupsX, u32 groupsY, u32 groupsZ) override;
+
 				void copyBuffer(rhi::CommandBufferHandle cmd, rhi::BufferHandle dst, rhi::BufferHandle src, u64 size) override;
 				void pushConstants(rhi::CommandBufferHandle cmd, rhi::PipelineLayoutHandle layout, const void* data, u32 size, u32 offset) override;
 				bool supportsBindless() const override { return device_.supportsBindless(); }
@@ -80,6 +93,13 @@ namespace mv
 				void freeImage(rhi::TextureHandle handle) override;
 				void freeBuffer(rhi::BufferHandle handle) override;
 
+				// Destroys everything retired framesInFlight frames ago and recycles its handles.
+				void drainPendingFrees(u32 frameSlot);
+
+				// The actual destruction, once nothing can still be referencing it.
+				void destroyImage(rhi::TextureHandle handle);
+				void destroyBuffer(rhi::BufferHandle handle);
+
 				void releaseImage(rhi::TextureHandle handle) override;
 				void releaseBuffer(rhi::BufferHandle handle) override;
 
@@ -88,6 +108,9 @@ namespace mv
 
 				// Writes an SRV for a texture, honouring a mip subrange when one is asked for.
 				void createTextureSrv(rhi::TextureHandle texture, u32 baseMip, u32 mipCount, D3D12_CPU_DESCRIPTOR_HANDLE dst);
+
+				// One writable level, in the UAV-capable twin of the texture's format.
+				void createTextureUav(rhi::TextureHandle texture, u32 mipLevel, D3D12_CPU_DESCRIPTOR_HANDLE dst);
 
 			private:
 				struct DxBindGroup
@@ -117,8 +140,18 @@ namespace mv
 				std::vector<DxBuffer> buffers_;
 				std::vector<DxImage> images_;
 
+				// Handles whose resources have actually been destroyed and can be handed out
 				std::vector<rhi::TextureHandle> freeImageList_;
 				std::vector<rhi::BufferHandle> freeBufferList_;
+
+				// Retired this frame but not yet destroyed. A resource the render graph frees at
+				// its last use is still referenced by the command list being recorded, and by the
+				// frames already in flight. Destroying it there is what the debug layer calls
+				// deleting an object that is still in use, and what hangs the device. Each slot
+				// is drained at the top of the frame that reuses it, which is the point at which
+				// its fence has proved the GPU is done.
+				std::vector<std::vector<rhi::TextureHandle>> pendingImageFree_;
+				std::vector<std::vector<rhi::BufferHandle>> pendingBufferFree_;
 
 				std::vector<rhi::TextureHandle> backbuffers_;
 
@@ -131,6 +164,13 @@ namespace mv
 				DxPipelineManager pipelineManager_;
 
 				DxCommandPool commandPool_[(u32)rhi::EQueueType::eNum];
+
+				// Backs beginImmediateCommands. One is enough: an immediate submit is waited
+				// on before it returns, so two can never be outstanding at once.
+				wrl::ComPtr<ID3D12CommandAllocator> immediateAllocator_;
+
+				// Lazily built on the first indirect draw; interprets plain draw arguments.
+				wrl::ComPtr<ID3D12CommandSignature> drawSignature_;
 
 				types::u32 currentFrame_ = 0;
 			};

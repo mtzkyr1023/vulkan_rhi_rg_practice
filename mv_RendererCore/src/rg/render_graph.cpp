@@ -59,9 +59,39 @@ namespace mv::rg
 			return rhi::ETextureFormat::eR8G8B8A8_UNORM;
 		case ERGFormat::R8G8B8A8_SRGB:
 			return rhi::ETextureFormat::eR8G8B8A8_SRGB;
+		case ERGFormat::B8G8R8A8_UNORM:
+			return rhi::ETextureFormat::eB8G8R8A8_UNORM;
+		case ERGFormat::R16G16_SFLOAT:
+			return rhi::ETextureFormat::eR16G16_SFLOAT;
+		case ERGFormat::R16G16B16A16_SFLOAT:
+			return rhi::ETextureFormat::eR16G16B16A16_SFLOAT;
+		case ERGFormat::R32G32_UINT:
+			return rhi::ETextureFormat::eR32G32_UINT;
+		case ERGFormat::D32_SFLOAT:
+			return rhi::ETextureFormat::eD32_SFLOAT;
 		default:
 			return rhi::ETextureFormat::eR8G8B8A8_UNORM;
 		}
+	}
+
+	rhi::ETextureUsage convertTextureCapabilities(ERGTextureCapability capabilities)
+	{
+		rhi::ETextureUsage usage = (rhi::ETextureUsage)0;
+
+		if ((capabilities & ERGTextureCapability::ColorAttachment) == ERGTextureCapability::ColorAttachment)
+			usage |= rhi::ETextureUsage::eColorAttachment;
+		if ((capabilities & ERGTextureCapability::DepthAttachment) == ERGTextureCapability::DepthAttachment)
+			usage |= rhi::ETextureUsage::eDepthStencilAttachment;
+		if ((capabilities & ERGTextureCapability::ShaderRead) == ERGTextureCapability::ShaderRead)
+			usage |= rhi::ETextureUsage::eSampled;
+		if ((capabilities & ERGTextureCapability::Storage) == ERGTextureCapability::Storage)
+			usage |= rhi::ETextureUsage::eStorage;
+		if ((capabilities & ERGTextureCapability::CopySrc) == ERGTextureCapability::CopySrc)
+			usage |= rhi::ETextureUsage::eTransferSrc;
+		if ((capabilities & ERGTextureCapability::CopyDst) == ERGTextureCapability::CopyDst)
+			usage |= rhi::ETextureUsage::eTransferDst;
+
+		return usage;
 	}
 
 	rhi::EResourceState convertTextureState(ERGTextureUsage usage)
@@ -256,6 +286,12 @@ namespace mv::rg
 				auto& texture = textures_[textureUsage.handle];
 				if (texture.firstUseHandle == INVALID_HANDLE) texture.firstUseHandle = handle;
 				texture.lastUseHandle = handle;
+
+				// Emitted even when the state does not change. Two consecutive passes
+				// writing the same attachment still need a dependency between them, and
+				// only the backend knows whether its API expresses that as a barrier: D3D12
+				// orders same-state writes itself and rejects a no-op transition, while
+				// Vulkan needs an explicit one.
 				rhi::TextureBarrier barrier
 				{
 					.texture = textures_[textureUsage.handle].physical,
@@ -263,6 +299,7 @@ namespace mv::rg
 					.after = convertTextureState(textureUsage.usage),
 				};
 				compiledPass.textureBarriers.push_back(barrier);
+
 				texture.lastState = textureUsage.usage;
 			}
 			for (auto& bufferUsage : pass.bufferUsages)
@@ -270,6 +307,7 @@ namespace mv::rg
 				auto& buffer = buffers_[bufferUsage.handle];
 				if (buffer.firstUseHandle == INVALID_HANDLE) buffer.firstUseHandle = handle;
 				buffer.lastUseHandle = handle;
+
 				rhi::BufferBarrier barrier
 				{
 					.buffer = buffers_[bufferUsage.handle].physical,
@@ -277,6 +315,7 @@ namespace mv::rg
 					.after = convertBufferState(bufferUsage.usage),
 				};
 				compiledPass.bufferBarriers.push_back(barrier);
+
 				buffer.lastState = bufferUsage.usage;
 			}
 
@@ -317,6 +356,44 @@ namespace mv::rg
 				}
 			}
 		}
+
+		// Every texture goes back to the state it was declared to start in.
+		//
+		// The graph is rebuilt from scratch each frame and resets lastState to
+		// initialState, but the resource behind it is not: an imported one lives across
+		// frames and a transient comes back off the free list carrying whatever the last
+		// frame left in it. Without this the declaration is only true for a pass sequence
+		// that happens to end where it began, and adding a pass that reads the depth buffer
+		// at the end of the frame silently breaks the next frame's clear.
+		//
+		// An initial state of Undefined means the caller is managing the transitions
+		// itself, which is how the backbuffer is imported -- the RHI moves it to present
+		// after this returns, and a restore here would fight that.
+		for (auto& texture : textures_)
+		{
+			if (texture.physical == INVALID_HANDLE)
+				continue;
+
+			if (texture.desc.initialState == ERGTextureUsage::Undefined)
+				continue;
+
+			if (texture.lastState == texture.desc.initialState)
+				continue;
+
+			// Safe even though the transient was already handed back at its last use: the
+			// free is deferred to the frame that reuses the slot, so the resource is still
+			// alive and it is the state travelling with it that has to be right.
+			rhi::TextureBarrier barrier
+			{
+				.texture = texture.physical,
+				.before = convertTextureState(texture.lastState),
+				.after = convertTextureState(texture.desc.initialState),
+			};
+
+			rhi_->textureBarrier(cmd, barrier);
+
+			texture.lastState = texture.desc.initialState;
+		}
 	}
 
 	void RenderGraph::allocate()
@@ -324,12 +401,21 @@ namespace mv::rg
 		for (auto& texture : textures_)
 		{
 			if (texture.physical != INVALID_HANDLE) continue;
+
+			// Capabilities cover the texture's whole life; the initial state is only where
+			// it starts. Falling back to the state keeps callers that predate this working,
+			// but anything rendered into and then sampled has to declare both.
+			const rhi::ETextureUsage usage = ((u32)texture.desc.capabilities != 0)
+				? convertTextureCapabilities(texture.desc.capabilities)
+				: convertTextureUsage(texture.desc.initialState);
+
 			texture.physical = rhi_->createTexture(rhi::TextureDesc
 				{
 					.width = texture.desc.width,
 					.height = texture.desc.height,
 					.depth = texture.desc.depth,
-					.usage = convertTextureUsage(texture.desc.initialState),
+					.usage = usage,
+					.mipLevels = texture.desc.mipLevels,
 					.format = convertTextureFormat(texture.desc.format),
 					.memoryType = convertMemoryType(texture.desc.memoryType),
 				});

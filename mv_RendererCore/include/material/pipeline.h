@@ -51,7 +51,9 @@ namespace mv
 
 				rhi::VertexLayout vertexLayout;
 
-				rhi::ETextureFormat colorFormat = rhi::ETextureFormat::eUndefined;
+				// Every colour target the pass writes, in order. The forward path writes shaded
+				// colour and screen-space velocity, so a single format is no longer enough.
+				std::vector<rhi::ETextureFormat> colorFormats;
 				rhi::ETextureFormat depthFormat = rhi::ETextureFormat::eUndefined;
 			};
 

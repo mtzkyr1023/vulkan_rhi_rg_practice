@@ -104,19 +104,28 @@ namespace mv
 			{
 				u32 drawIndex = 0;
 				u32 materialIndex = 0;
+
+				// Only the shadow pass uses this, but the layout is shared, so every pass
+				// pushes the same struct.
+				u32 cascadeIndex = 0;
 			};
 
 			bool initialize(
 				const std::shared_ptr<rhi::IRHI>& rhi,
 				const ShaderCode& vs,
 				const ShaderCode& ps,
-				rhi::ETextureFormat colorFormat,
+				const std::vector<rhi::ETextureFormat>& colorFormats,
 				rhi::ETextureFormat depthFormat);
 
 			void deinitialize();
 
 			// Idempotent: the same texture always maps to the same slot.
 			u32 registerTexture(rhi::TextureHandle texture);
+
+			// Re-points an existing bindless slot at a different texture, so materials that
+			// already hold the index keep working. This is what lets a generator rebuild
+			// its maps at a new size without inventing a new material every time.
+			void replaceTexture(u32 textureIndex, rhi::TextureHandle texture);
 
 			// Re-points a bindless slot at a subrange of its texture's mip chain. This is
 			// how a streaming system exposes only the levels that are currently resident.

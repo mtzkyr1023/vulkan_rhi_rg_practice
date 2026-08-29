@@ -2,12 +2,35 @@
 
 namespace mv::backend::vk1_4
 {
-
+	namespace
+	{
+		// vulkan_pipeline.cpp keeps its own copy for the depth state; a sampler needs the
+		// same mapping and neither file is the natural owner of a shared one.
+		VkCompareOp toSamplerCompareOp(rhi::ECompareOp op)
+		{
+			switch (op)
+			{
+			case rhi::ECompareOp::eNever:        return VK_COMPARE_OP_NEVER;
+			case rhi::ECompareOp::eLess:         return VK_COMPARE_OP_LESS;
+			case rhi::ECompareOp::eEqual:        return VK_COMPARE_OP_EQUAL;
+			case rhi::ECompareOp::eLessEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
+			case rhi::ECompareOp::eGreater:      return VK_COMPARE_OP_GREATER;
+			case rhi::ECompareOp::eNotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
+			case rhi::ECompareOp::eGreaterEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+			case rhi::ECompareOp::eAlways:
+			default:                             return VK_COMPARE_OP_ALWAYS;
+			}
+		}
+	}
 
 	void VulkanRHI::initialize(void* hwnd)
 	{
 		device_.initialize();
 		swapchain_.initialize(&device_, hwnd);
+
+		// Kept because a Vulkan swap chain cannot be resized in place and has to be rebuilt
+		// from the window it belongs to.
+		hwnd_ = hwnd;
 
 		for (u32 i = 0; i < (u32)rhi::EMemoryType::eNum; i++)
 		{
@@ -27,6 +50,9 @@ namespace mv::backend::vk1_4
 		commandPool_[(u32)rhi::EQueueType::eCompute].initialize(&device_, device_.graphicsQueueFamilyIndex());
 		commandPool_[(u32)rhi::EQueueType::eTransfer].initialize(&device_, device_.graphicsQueueFamilyIndex());
 
+		pendingImageFree_.resize((size_t)framesInFlight_);
+		pendingBufferFree_.resize((size_t)framesInFlight_);
+
 		frameResources_.resize((size_t)framesInFlight_);
 		for (u32 i = 0; i < framesInFlight_; i++)
 		{
@@ -43,6 +69,13 @@ namespace mv::backend::vk1_4
 			vkWaitForFences(device_.device(), 1, &frameResources_[i].inFlightFence, VK_TRUE, UINT64_MAX);
 		}
 		device_.waitIdle();
+
+		// Nothing is in flight any more, so everything still retired can go now.
+		for (u32 i = 0; i < framesInFlight_; i++)
+		{
+			drainPendingFrees(i);
+		}
+
 	
 		for (u32 i = 0; i < framesInFlight_; i++)
 		{
@@ -98,11 +131,31 @@ namespace mv::backend::vk1_4
 
 		vkResetFences(device_.device(), 1, &frameResource.inFlightFence);
 
+		// The same wait proves the GPU is done with anything this slot retired, so it is
+		// also the moment those resources can actually be destroyed.
+		drainPendingFrees(currentFrame_);
+
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		vkBeginCommandBuffer(commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(frameResource.commandBuffer).commandBuffer(), &beginInfo);
 
-		swapchain_.acquireNextImage(frameResource.imageAvailableSemaphore);
+		// An out-of-date chain signals nothing, so the frame cannot be submitted as it
+		// stands: the wait on imageAvailableSemaphore would never be satisfied, and the
+		// image index left behind is one this chain never handed out. It happens whenever
+		// the window changes size between a present and the next acquire, which the
+		// explicit resize path cannot get ahead of -- the compositor is not obliged to
+		// deliver WM_SIZE first.
+		VkResult acquired = swapchain_.acquireNextImage(frameResource.imageAvailableSemaphore);
+
+		if (acquired == VK_ERROR_OUT_OF_DATE_KHR && recreateSwapchain())
+		{
+			acquired = swapchain_.acquireNextImage(frameResource.imageAvailableSemaphore);
+		}
+
+		if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR)
+		{
+			throw std::exception("Failed to acquire a swap chain image");
+		}
 
 		context.backbuffer = backbuffers_[swapchain_.imageIndex()];
 		context.cmd = frameResource.commandBuffer;
@@ -148,7 +201,15 @@ namespace mv::backend::vk1_4
 			throw std::exception("Failed to submit draw command buffer");
 		}
 
-		swapchain_.present(device_.graphicsQueue());
+		// An out-of-date or suboptimal present is not an error and not worth stalling on:
+		// the next acquire reports the same thing and rebuilds there, at the point in the
+		// frame where nothing is half-recorded.
+		const VkResult presented = swapchain_.present(device_.graphicsQueue());
+
+		if (presented != VK_SUCCESS && presented != VK_SUBOPTIMAL_KHR && presented != VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			throw std::exception("Failed to present");
+		}
 	}
 
 	void VulkanRHI::beginRenderPass(rhi::CommandBufferHandle cmd, const rhi::RenderPassDesc& desc)
@@ -190,7 +251,9 @@ namespace mv::backend::vk1_4
 		{
 			depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 			depthAttachment.imageView = images_[desc.depthTarget.texture].view;
-			depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+			// Matches what a barrier to eDepthStencilWrite puts the image in; a rendering
+			// attachment whose declared layout differs from the actual one is invalid.
+			depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			depthAttachment.loadOp = desc.depthTarget.clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 			depthAttachment.clearValue.depthStencil.depth = desc.depthTarget.clearDepth;
@@ -225,6 +288,8 @@ namespace mv::backend::vk1_4
 		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineManager_.pipeline(pipeline).pipeline());
+
+		commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).setComputeBindPoint(false);
 	}
 
 	void VulkanRHI::setViewport(rhi::CommandBufferHandle cmd, f32 x, f32 y, f32 width, f32 height)
@@ -261,6 +326,13 @@ namespace mv::backend::vk1_4
 		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
 
 		vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+	}
+
+	void VulkanRHI::drawIndirect(rhi::CommandBufferHandle cmd, rhi::BufferHandle args, u64 offset)
+	{
+		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
+
+		vkCmdDrawIndirect(commandBuffer, buffers_[args].buffer, offset, 1, sizeof(VkDrawIndirectCommand));
 	}
 
 	rhi::ETextureFormat VulkanRHI::backbufferFormat() const
@@ -414,15 +486,23 @@ namespace mv::backend::vk1_4
 		std::vector<VkBufferImageCopy> regions;
 		regions.reserve(levelCount);
 
+		// Layer-major: every mip of layer 0, then every mip of layer 1. For a plain 2D
+		// texture that collapses to the mip chain and nothing changes.
+		const u32 mipsPerLayer = textureDesc.mipLevels ? textureDesc.mipLevels : 1;
+
 		u64 offset = 0;
-		for (u32 level = 0; level < levelCount; level++)
+		for (u32 i = 0; i < levelCount; i++)
 		{
-			writeBuffer(staging, levels[level].data, levels[level].size, offset);
+			writeBuffer(staging, levels[i].data, levels[i].size, offset);
+
+			const u32 layer = i / mipsPerLayer;
+			const u32 level = i % mipsPerLayer;
 
 			VkBufferImageCopy region{};
 			region.bufferOffset = offset;
 			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			region.imageSubresource.mipLevel = level;
+			region.imageSubresource.baseArrayLayer = layer;
 			region.imageSubresource.layerCount = 1;
 			region.imageExtent =
 			{
@@ -433,7 +513,7 @@ namespace mv::backend::vk1_4
 
 			regions.push_back(region);
 
-			offset += levels[level].size;
+			offset += levels[i].size;
 		}
 
 		VkCommandBuffer commandBuffer = beginOneShotCommands();
@@ -445,7 +525,7 @@ namespace mv::backend::vk1_4
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		barrier.subresourceRange.levelCount = textureDesc.mipLevels;
-		barrier.subresourceRange.layerCount = 1;
+		barrier.subresourceRange.layerCount = textureDesc.arrayLayers ? textureDesc.arrayLayers : 1;
 
 		barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -474,6 +554,10 @@ namespace mv::backend::vk1_4
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 			0, 0, nullptr, 0, nullptr, 1, &barrier);
 
+		// Kept in step with the barriers the RHI records itself, so a later transition can
+		// ask where the upload left it.
+		images_[handle].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
 		endOneShotCommands(commandBuffer);
 
 		releaseBuffer(staging);
@@ -485,7 +569,9 @@ namespace mv::backend::vk1_4
 		{
 			if (entry.first.filter == desc.filter &&
 				entry.first.address == desc.address &&
-				entry.first.maxAnisotropy == desc.maxAnisotropy)
+				entry.first.maxAnisotropy == desc.maxAnisotropy &&
+				entry.first.compareEnable == desc.compareEnable &&
+				entry.first.compareOp == desc.compareOp)
 			{
 				return entry.second;
 			}
@@ -514,6 +600,12 @@ namespace mv::backend::vk1_4
 			ci.maxAnisotropy = (anisotropy < device_.maxSamplerAnisotropy()) ? anisotropy : device_.maxSamplerAnisotropy();
 		}
 
+		if (desc.compareEnable)
+		{
+			ci.compareEnable = VK_TRUE;
+			ci.compareOp = toSamplerCompareOp(desc.compareOp);
+		}
+
 		VkSampler sampler = VK_NULL_HANDLE;
 		vkCreateSampler(device_.device(), &ci, nullptr, &sampler);
 
@@ -532,7 +624,9 @@ namespace mv::backend::vk1_4
 		std::vector<VkDescriptorBufferInfo> bufferInfos;
 		std::vector<VkDescriptorImageInfo> imageInfos;
 		bufferInfos.reserve(desc.uniformBuffers.size());
-		imageInfos.reserve(desc.sampledTextures.size() + desc.samplers.size());
+		// Reserved up front because every write holds a pointer into this vector until
+		// vkUpdateDescriptorSets runs, and a reallocation would dangle all of them.
+		imageInfos.reserve(desc.sampledTextures.size() + desc.storageTextures.size() + desc.samplers.size());
 
 		std::vector<VkWriteDescriptorSet> writes;
 
@@ -572,6 +666,24 @@ namespace mv::backend::vk1_4
 			write.descriptorCount = 1;
 			write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			write.pBufferInfo = &storageInfos.back();
+			writes.push_back(write);
+		}
+
+		for (const auto& binding : desc.storageTextures)
+		{
+			VkDescriptorImageInfo info{};
+			info.imageView = getStorageImageView(binding.texture, binding.mipLevel);
+			info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			imageInfos.push_back(info);
+
+			VkWriteDescriptorSet write{};
+			write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write.dstSet = group.set;
+			write.dstBinding = binding.binding;
+			write.dstArrayElement = binding.arrayIndex;
+			write.descriptorCount = 1;
+			write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			write.pImageInfo = &imageInfos.back();
 			writes.push_back(write);
 		}
 
@@ -636,8 +748,11 @@ namespace mv::backend::vk1_4
 
 		for (const auto& entry : imageViewCache_)
 		{
-			if (entry.first.texture == texture && entry.first.baseMip == baseMip && entry.first.mipCount == levels)
+			if (entry.first.texture == texture && entry.first.baseMip == baseMip &&
+				entry.first.mipCount == levels && !entry.first.storage)
+			{
 				return entry.second;
+			}
 		}
 
 		VkImageViewCreateInfo viewInfo{};
@@ -651,12 +766,146 @@ namespace mv::backend::vk1_4
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
 
+		// Same reason as the view built alongside the image: an sRGB view of a
+		// storage-capable image only passes validation once the usage is narrowed to the
+		// one this view is actually for.
+		VkImageViewUsageCreateInfo viewUsage{};
+
+		if ((image.desc.usage & rhi::ETextureUsage::eStorage) == rhi::ETextureUsage::eStorage &&
+			viewInfo.format != toVkStorageFormat(image.desc.format))
+		{
+			viewUsage.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+			viewUsage.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+
+			viewInfo.pNext = &viewUsage;
+		}
+
 		VkImageView view = VK_NULL_HANDLE;
 		vkCreateImageView(device_.device(), &viewInfo, nullptr, &view);
 
-		imageViewCache_.push_back({ { texture, baseMip, levels }, view });
+		imageViewCache_.push_back({ { texture, baseMip, levels, false }, view });
 
 		return view;
+	}
+
+	VkImageView VulkanRHI::getStorageImageView(rhi::TextureHandle texture, u32 mipLevel)
+	{
+		const VulkanImage& image = images_[texture];
+
+		mipLevel = std::min(mipLevel, image.desc.mipLevels - 1);
+
+		const u32 layers = image.desc.arrayLayers ? image.desc.arrayLayers : 1;
+
+		for (const auto& entry : imageViewCache_)
+		{
+			if (entry.first.texture == texture && entry.first.baseMip == mipLevel &&
+				entry.first.mipCount == 1 && entry.first.storage)
+			{
+				return entry.second;
+			}
+		}
+
+		VkImageViewCreateInfo viewInfo{};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = image.image;
+
+		// A cube is written as the six-layer array it is: there is no storage image view
+		// type for a cube, and a shader writing one face at a time wants the layer index
+		// anyway. This is what makes the HLSL side an RWTexture2DArray. A volume keeps its
+		// own type, because a 3D write addresses a voxel rather than a slice.
+		viewInfo.viewType = image.desc.volume
+			? VK_IMAGE_VIEW_TYPE_3D
+			: ((layers > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D);
+
+		viewInfo.format = toVkStorageFormat(image.desc.format);
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewInfo.subresourceRange.baseMipLevel = mipLevel;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = layers;
+
+		VkImageView view = VK_NULL_HANDLE;
+		vkCreateImageView(device_.device(), &viewInfo, nullptr, &view);
+
+		imageViewCache_.push_back({ { texture, mipLevel, 1, true }, view });
+
+		return view;
+	}
+
+	void VulkanRHI::updateBindGroupStorageTexture(rhi::BindGroupHandle group, u32 binding, u32 arrayIndex, rhi::TextureHandle texture, u32 mipLevel)
+	{
+		VkDescriptorImageInfo info{};
+		info.imageView = getStorageImageView(texture, mipLevel);
+
+		// GENERAL is the only layout a storage image can be written in. It is also why a
+		// texture that is alternately written and sampled needs a barrier between the two
+		// rather than just a pipeline stage dependency.
+		info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		VkWriteDescriptorSet write{};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = bindGroups_[group].set;
+		write.dstBinding = binding;
+		write.dstArrayElement = arrayIndex;
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		write.pImageInfo = &info;
+
+		vkUpdateDescriptorSets(device_.device(), 1, &write, 0, nullptr);
+	}
+
+	rhi::CommandBufferHandle VulkanRHI::beginImmediateCommands()
+	{
+		VulkanCommandPool& pool = commandPool_[(u32)rhi::EQueueType::eGraphics];
+
+		const rhi::CommandBufferHandle cmd = pool.allocate();
+		pool.getCommandBuffer(cmd).begin();
+
+		return cmd;
+	}
+
+	void VulkanRHI::endImmediateCommands(rhi::CommandBufferHandle cmd)
+	{
+		VulkanCommandPool& pool = commandPool_[(u32)rhi::EQueueType::eGraphics];
+
+		VulkanCommandBuffer& buffer = pool.getCommandBuffer(cmd);
+		buffer.end();
+
+		VkCommandBuffer handle = buffer.commandBuffer();
+
+		VkSubmitInfo submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &handle;
+
+		vkQueueSubmit(device_.graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+
+		// Waited on rather than fenced: the caller is about to read or free whatever this
+		// touched, and the point of an immediate submit is that it has finished.
+		vkQueueWaitIdle(device_.graphicsQueue());
+
+		pool.free(cmd);
+	}
+
+	rhi::PipelineHandle VulkanRHI::createComputePipeline(const rhi::ComputePipelineDesc& desc)
+	{
+		return pipelineManager_.createComputePipeline(desc);
+	}
+
+	void VulkanRHI::bindComputePipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline)
+	{
+		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineManager_.pipeline(pipeline).pipeline());
+
+		commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).setComputeBindPoint(true);
+	}
+
+	void VulkanRHI::dispatch(rhi::CommandBufferHandle cmd, u32 groupsX, u32 groupsY, u32 groupsZ)
+	{
+		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
+
+		vkCmdDispatch(commandBuffer, groupsX, groupsY, groupsZ);
 	}
 
 	void VulkanRHI::copyBuffer(rhi::CommandBufferHandle cmd, rhi::BufferHandle dst, rhi::BufferHandle src, u64 size)
@@ -699,6 +948,24 @@ namespace mv::backend::vk1_4
 		vkUpdateDescriptorSets(device_.device(), 1, &write, 0, nullptr);
 	}
 
+	void VulkanRHI::updateBindGroupBuffer(rhi::BindGroupHandle group, u32 binding, rhi::BufferHandle buffer, u64 offset, u32 stride, u32 count)
+	{
+		VkDescriptorBufferInfo info{};
+		info.buffer = buffers_[buffer].buffer;
+		info.offset = offset;
+		info.range = count ? (VkDeviceSize)stride * count : VK_WHOLE_SIZE;
+
+		VkWriteDescriptorSet write{};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = bindGroups_[group].set;
+		write.dstBinding = binding;
+		write.descriptorCount = 1;
+		write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		write.pBufferInfo = &info;
+
+		vkUpdateDescriptorSets(device_.device(), 1, &write, 0, nullptr);
+	}
+
 	void VulkanRHI::pushConstants(rhi::CommandBufferHandle cmd, rhi::PipelineLayoutHandle layout, const void* data, u32 size, u32 offset)
 	{
 		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
@@ -706,7 +973,7 @@ namespace mv::backend::vk1_4
 		vkCmdPushConstants(
 			commandBuffer,
 			pipelineManager_.layout(layout).layout(),
-			VK_SHADER_STAGE_ALL_GRAPHICS,
+			VK_SHADER_STAGE_ALL,
 			offset,
 			size,
 			data);
@@ -714,13 +981,14 @@ namespace mv::backend::vk1_4
 
 	void VulkanRHI::bindBindGroup(rhi::CommandBufferHandle cmd, rhi::PipelineLayoutHandle layout, u32 setIndex, rhi::BindGroupHandle group)
 	{
-		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
+		VulkanCommandBuffer& wrapper = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd);
+		VkCommandBuffer commandBuffer = wrapper.commandBuffer();
 
 		VkDescriptorSet sets[] = { bindGroups_[group].set };
 
 		vkCmdBindDescriptorSets(
 			commandBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			wrapper.isComputeBindPoint() ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipelineManager_.layout(layout).layout(),
 			setIndex,
 			1, sets,
@@ -743,14 +1011,27 @@ namespace mv::backend::vk1_4
 		backbufferDesc.usage = rhi::ETextureUsage::eColorAttachment;
 		backbufferDesc.format = fromVkFormat(swapchain_.format());
 
+		// On a resize the handles already exist and are held by callers, so the images are
+		// rewritten in place rather than appended.
+		const bool recreating = !backbuffers_.empty();
+
 		std::vector<rhi::TextureHandle> backbuffers;
 		for (u32 i = 0; i < swapchain_.imageCount(); i++)
 		{
-			rhi::TextureHandle handle = (rhi::TextureHandle)images_.size();
 			VkImage image = swapchain_.images()[i];
 			VkImageView view = swapchain_.views()[i];
 
-			images_.emplace_back(backbufferDesc, image, view, Allocation(), true);
+			rhi::TextureHandle handle;
+			if (recreating)
+			{
+				handle = backbuffers_[i];
+				images_[handle] = VulkanImage{ backbufferDesc, image, view, Allocation(), VK_IMAGE_LAYOUT_UNDEFINED, true };
+			}
+			else
+			{
+				handle = (rhi::TextureHandle)images_.size();
+				images_.push_back(VulkanImage{ backbufferDesc, image, view, Allocation(), VK_IMAGE_LAYOUT_UNDEFINED, true });
+			}
 
 			backbuffers.push_back(handle);
 		}
@@ -758,12 +1039,40 @@ namespace mv::backend::vk1_4
 		backbuffers_ = backbuffers;
 	}
 
+	bool VulkanRHI::recreateSwapchain()
+	{
+		// A minimised window reports a zero extent, which no chain can be built at. The
+		// caller is expected to stop drawing until there is a surface again.
+		if (!swapchain_.surfaceHasArea())
+			return false;
+
+		// The chain being replaced may still be the target of frames in flight, and the
+		// backbuffer textures about to be rewritten are what those frames are drawing to.
+		waitIdle();
+
+		swapchain_.resize(hwnd_);
+
+		createBackbuffer();
+
+		return true;
+	}
+
+	void VulkanRHI::resize(u32 width, u32 height)
+	{
+		if (width == 0 || height == 0)
+			return;
+
+		recreateSwapchain();
+	}
+
 	rhi::BufferHandle VulkanRHI::createBuffer(const rhi::BufferDesc& desc)
 	{
+		// usage as well as size: a recycled buffer keeps the usage it was created with, and
+		// binding one as an index buffer that was never made as one is invalid on Vulkan.
 		for (auto& id : freeBufferList_)
 		{
 			const auto& d = buffers_[id].desc;
-			if (d.memoryType == desc.memoryType && d.size == desc.size)
+			if (d.memoryType == desc.memoryType && d.size == desc.size && d.usage == desc.usage)
 			{
 				rhi::BufferHandle handle = id;
 				id = freeBufferList_.back();
@@ -806,7 +1115,7 @@ namespace mv::backend::vk1_4
 		for (auto& id : freeImageList_)
 		{
 			const auto& d = images_[id].desc;
-			if (d.memoryType == desc.memoryType && d.format == desc.format && d.width == desc.width && d.height == desc.height && d.depth == desc.depth)
+			if (rhi::textureDescMatches(d, desc))
 			{
 				rhi::TextureHandle handle = id;
 				id = freeImageList_.back();
@@ -822,19 +1131,41 @@ namespace mv::backend::vk1_4
 
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageInfo.imageType = desc.volume ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
 		imageInfo.extent.width = desc.width;
 		imageInfo.extent.height = desc.height;
 		imageInfo.extent.depth = desc.depth;
 		const u32 mipLevels = desc.mipLevels ? desc.mipLevels : rhi::mipLevelsFor(desc.width, desc.height);
 
+		const u32 arrayLayers = desc.arrayLayers ? desc.arrayLayers : 1;
+
 		imageInfo.mipLevels = mipLevels;
-		imageInfo.arrayLayers = 1;
+		imageInfo.arrayLayers = arrayLayers;
 		imageInfo.format = toVkFormat(desc.format);
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		// A cube is an ordinary six-layer array image; only the flag and the view type make
+		// it addressable by direction.
+		if (desc.cube)
+		{
+			imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+		}
+
+		// No sRGB format supports STORAGE_IMAGE, and not merely for views: the image's own
+		// format has to support the usage, so an sRGB image cannot be declared storage at
+		// all. The image is therefore created as the UNORM twin and made mutable, with the
+		// sRGB view -- the one everything samples through -- built over it. D3D12 solves the
+		// same problem with a typeless resource and two typed views; here the base format
+		// is one of the two rather than neither.
+		if ((desc.usage & rhi::ETextureUsage::eStorage) == rhi::ETextureUsage::eStorage &&
+			toVkFormat(desc.format) != toVkStorageFormat(desc.format))
+		{
+			imageInfo.format = toVkStorageFormat(desc.format);
+			imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+		}
 
 		imageInfo.usage = 0;
 		if ((desc.usage & rhi::ETextureUsage::eSampled) == rhi::ETextureUsage::eSampled) imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -856,8 +1187,9 @@ namespace mv::backend::vk1_4
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.image = image;
-		// ToDo: Support different view types
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewInfo.viewType = desc.volume
+			? VK_IMAGE_VIEW_TYPE_3D
+			: (desc.cube ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D);
 		viewInfo.format = toVkFormat(desc.format);
 		// A depth image's view must be created with the depth aspect, not colour.
 		const bool isDepth = (desc.format == rhi::ETextureFormat::eD32_SFLOAT || desc.format == rhi::ETextureFormat::eD24_UNORM_S8_UINT);
@@ -866,7 +1198,22 @@ namespace mv::backend::vk1_4
 		viewInfo.subresourceRange.baseMipLevel = 0;
 		viewInfo.subresourceRange.levelCount = mipLevels;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
+		viewInfo.subresourceRange.layerCount = arrayLayers;
+
+		// A view's format is validated against the image's whole usage, so an sRGB view of
+		// a storage-capable image is rejected -- no sRGB format supports storage. Narrowing
+		// the usage this particular view is for is what the check is then made against, and
+		// it is the only way to have both views on one image.
+		VkImageViewUsageCreateInfo viewUsage{};
+
+		if ((desc.usage & rhi::ETextureUsage::eStorage) == rhi::ETextureUsage::eStorage &&
+			viewInfo.format != toVkStorageFormat(desc.format))
+		{
+			viewUsage.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+			viewUsage.usage = imageInfo.usage & ~VK_IMAGE_USAGE_STORAGE_BIT;
+
+			viewInfo.pNext = &viewUsage;
+		}
 
 		if (vkCreateImageView(device_.device(), &viewInfo, nullptr, &view) != VK_SUCCESS)
 		{
@@ -878,15 +1225,20 @@ namespace mv::backend::vk1_4
 		rhi::TextureDesc resolvedDesc = desc;
 		resolvedDesc.mipLevels = mipLevels;
 
-		images_.emplace_back(resolvedDesc, image, view, alloc, false);
+		images_.push_back(VulkanImage{ resolvedDesc, image, view, alloc, VK_IMAGE_LAYOUT_UNDEFINED, false });
 
 		// Depth targets are moved into their attachment layout once and stay there, which
 		// mirrors D3D12 creating them straight into DEPTH_WRITE. A render target that is
 		// also sampled gets the same treatment for its shader-read resting layout, so the
 		// render graph's per-frame barriers line up from the very first frame.
+		const bool isSampled = (desc.usage & rhi::ETextureUsage::eSampled) == rhi::ETextureUsage::eSampled;
 		const bool isSampledRenderTarget =
-			((desc.usage & rhi::ETextureUsage::eColorAttachment) == rhi::ETextureUsage::eColorAttachment) &&
-			((desc.usage & rhi::ETextureUsage::eSampled) == rhi::ETextureUsage::eSampled);
+			((desc.usage & rhi::ETextureUsage::eColorAttachment) == rhi::ETextureUsage::eColorAttachment) && isSampled;
+
+		// A shadow map is written as a depth target and then read as a texture every frame,
+		// so shader-read is where it comes to rest, not the attachment layout a plain depth
+		// buffer never leaves.
+		const bool restsInShaderRead = isSampledRenderTarget || (isDepth && isSampled);
 
 		if (isDepth || isSampledRenderTarget)
 		{
@@ -899,16 +1251,18 @@ namespace mv::backend::vk1_4
 			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 			barrier.subresourceRange.aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.levelCount = mipLevels;
-			barrier.subresourceRange.layerCount = 1;
+			barrier.subresourceRange.layerCount = arrayLayers;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			barrier.newLayout = isDepth ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = restsInShaderRead
+				? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				: VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = isDepth ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = restsInShaderRead ? VK_ACCESS_SHADER_READ_BIT : VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
 			vkCmdPipelineBarrier(
 				commandBuffer,
 				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-				isDepth ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				restsInShaderRead ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 				0, 0, nullptr, 0, nullptr, 1, &barrier);
 
 			endOneShotCommands(commandBuffer);
@@ -942,15 +1296,49 @@ namespace mv::backend::vk1_4
 	{
 		VulkanCommandBuffer& commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd);
 
+		VulkanImage& image = images_[barrier.texture];
+
+		// eUndefined as the source state means "from wherever it is now". A texture that
+		// is written before it is ever uploaded has no state the caller could name, and a
+		// recycled handle's is whatever the last user left it in; both are things the
+		// backend knows and the caller does not.
+		const VkImageLayout beforeLayout = (barrier.before == rhi::EResourceState::eUndefined)
+			? image.layout
+			: getImageLayout(barrier.before);
+
 		commandBuffer.pipelineBarrier(
-			VulkanStateInfo{ getPipelineStageFlags(barrier.before), getAccessFlags(barrier.before), getImageLayout(barrier.before) },
+			VulkanStateInfo{ getPipelineStageFlags(barrier.before), getAccessFlags(barrier.before), beforeLayout },
 			VulkanStateInfo{ getPipelineStageFlags(barrier.after), getAccessFlags(barrier.after), getImageLayout(barrier.after) },
-			images_[barrier.texture]);
+			image);
+
+		image.layout = getImageLayout(barrier.after);
 	}
 
 	void VulkanRHI::bufferBarrier(rhi::CommandBufferHandle cmd, const rhi::BufferBarrier& barrier)
 	{
-		const VulkanCommandBuffer& commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd);
+		VkCommandBuffer commandBuffer = commandPool_[(u32)rhi::EQueueType::eGraphics].getCommandBuffer(cmd).commandBuffer();
+
+		// Buffers have no layout, so this is purely an execution and memory dependency --
+		// which is the whole point when the two states are both shader-write: nothing else
+		// orders one dispatch's writes against the next pass's reads.
+		VkBufferMemoryBarrier bufferMemoryBarrier{};
+		bufferMemoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		bufferMemoryBarrier.srcAccessMask = getAccessFlags(barrier.before);
+		bufferMemoryBarrier.dstAccessMask = getAccessFlags(barrier.after);
+		bufferMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bufferMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bufferMemoryBarrier.buffer = buffers_[barrier.buffer].buffer;
+		bufferMemoryBarrier.offset = 0;
+		bufferMemoryBarrier.size = VK_WHOLE_SIZE;
+
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			getPipelineStageFlags(barrier.before),
+			getPipelineStageFlags(barrier.after),
+			0,
+			0, nullptr,
+			1, &bufferMemoryBarrier,
+			0, nullptr);
 	}
 
 	rhi::CommandBufferHandle VulkanRHI::getCurrentCommandBuffer() const
@@ -960,41 +1348,46 @@ namespace mv::backend::vk1_4
 
 	void VulkanRHI::freeImage(rhi::TextureHandle handle)
 	{
-		VulkanImage& image = images_[handle];
+		if (images_[handle].imported) return;
 
-		if (image.imported) return;
-
-		// The object has to go before the memory does: leaving it alive while the block is
-		// handed to the next allocation would alias two images onto the same memory.
-		if (image.view != VK_NULL_HANDLE)
-		{
-			vkDestroyImageView(device_.device(), image.view, nullptr);
-			image.view = VK_NULL_HANDLE;
-		}
-		if (image.image != VK_NULL_HANDLE)
-		{
-			vkDestroyImage(device_.device(), image.image, nullptr);
-			image.image = VK_NULL_HANDLE;
-		}
-
-		memoryAllocator_[(u32)image.desc.memoryType].free(image.alloc);
-		image.alloc = {};
+		// Retired, not destroyed. The command buffer being recorded still references it, and
+		// so do the frames already in flight.
+		pendingImageFree_[currentFrame_].push_back(handle);
 	}
 
 	void VulkanRHI::freeBuffer(rhi::BufferHandle handle)
 	{
-		VulkanBuffer& buffer = buffers_[handle];
+		if (buffers_[handle].imported) return;
 
-		if (buffer.imported) return;
+		pendingBufferFree_[currentFrame_].push_back(handle);
+	}
 
-		if (buffer.buffer != VK_NULL_HANDLE)
+	void VulkanRHI::destroyImage(rhi::TextureHandle handle)
+	{
+		// Recycled whole rather than destroyed: the image, its view and its memory block are
+		// all still valid and still match this desc, and a transient that comes back next
+		// frame with the same desc wants exactly that.
+		freeImageList_.push_back(handle);
+	}
+
+	void VulkanRHI::destroyBuffer(rhi::BufferHandle handle)
+	{
+		freeBufferList_.push_back(handle);
+	}
+
+	void VulkanRHI::drainPendingFrees(u32 frameSlot)
+	{
+		for (const auto& handle : pendingImageFree_[frameSlot])
 		{
-			vkDestroyBuffer(device_.device(), buffer.buffer, nullptr);
-			buffer.buffer = VK_NULL_HANDLE;
+			destroyImage(handle);
 		}
+		pendingImageFree_[frameSlot].clear();
 
-		memoryAllocator_[(u32)buffer.desc.memoryType].free(buffer.alloc);
-		buffer.alloc = {};
+		for (const auto& handle : pendingBufferFree_[frameSlot])
+		{
+			destroyBuffer(handle);
+		}
+		pendingBufferFree_[frameSlot].clear();
 	}
 
 	void VulkanRHI::releaseImage(rhi::TextureHandle handle)

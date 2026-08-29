@@ -18,6 +18,10 @@ namespace mv::material
 		constexpr u32 kSceneConstantsBinding = 0;
 		constexpr u32 kVirtualTextureInfoBinding = 1;
 		constexpr u32 kVirtualTexturePageTableBinding = 2;
+		constexpr u32 kShadowAtlasBinding = 3;
+		constexpr u32 kShadowSamplerBinding = 4;
+		constexpr u32 kEnvironmentMapBinding = 5;
+		constexpr u32 kCloudShadowBinding = 6;
 
 		// set 1: everything global. The material buffer sits at t0 and the texture array
 		// starts at t1, because an unbounded range swallows every register above its base.
@@ -46,7 +50,7 @@ namespace mv::material
 		const std::shared_ptr<rhi::IRHI>& rhi,
 		const ShaderCode& vs,
 		const ShaderCode& ps,
-		rhi::ETextureFormat colorFormat,
+		const std::vector<rhi::ETextureFormat>& colorFormats,
 		rhi::ETextureFormat depthFormat)
 	{
 		if (!vs.bytecode || !ps.bytecode)
@@ -71,6 +75,22 @@ namespace mv::material
 		sceneLayoutDesc.bindings.push_back({
 			.binding = kVirtualTexturePageTableBinding, .count = 1,
 			.type = rhi::EDescriptorType::eStorageBuffer,
+			.stages = rhi::EShaderStage::eFragment });
+		sceneLayoutDesc.bindings.push_back({
+			.binding = kShadowAtlasBinding, .count = 1,
+			.type = rhi::EDescriptorType::eSampledImage,
+			.stages = rhi::EShaderStage::eFragment });
+		sceneLayoutDesc.bindings.push_back({
+			.binding = kShadowSamplerBinding, .count = 1,
+			.type = rhi::EDescriptorType::eSampler,
+			.stages = rhi::EShaderStage::eFragment });
+		sceneLayoutDesc.bindings.push_back({
+			.binding = kEnvironmentMapBinding, .count = 1,
+			.type = rhi::EDescriptorType::eSampledImage,
+			.stages = rhi::EShaderStage::eFragment });
+		sceneLayoutDesc.bindings.push_back({
+			.binding = kCloudShadowBinding, .count = 1,
+			.type = rhi::EDescriptorType::eSampledImage,
 			.stages = rhi::EShaderStage::eFragment });
 
 		sceneLayout_ = rhi_->createBindGroupLayout(sceneLayoutDesc);
@@ -150,7 +170,7 @@ namespace mv::material
 		cacheDesc.vs = rhi_->createShader(vsDesc);
 		cacheDesc.ps = rhi_->createShader(psDesc);
 		cacheDesc.layout = pipelineLayout_;
-		cacheDesc.colorFormat = colorFormat;
+		cacheDesc.colorFormats = colorFormats;
 		cacheDesc.depthFormat = depthFormat;
 
 		cacheDesc.vertexLayout.bindings.push_back({ .binding = 0, .stride = sizeof(asset::ModelVertex), .perInstance = false });
@@ -223,6 +243,29 @@ namespace mv::material
 		rhi_->updateBindGroupTexture(bindlessBindGroup_, kTextureArrayBinding, index, texture);
 
 		return index;
+	}
+
+	void MaterialSystem::replaceTexture(u32 textureIndex, rhi::TextureHandle texture)
+	{
+		if (textureIndex >= texturesByIndex_.size() || texture == INVALID_HANDLE)
+			return;
+
+		// The index is what materials store, so re-pointing the slot is the only way to
+		// change what an existing material samples. Registering the new texture instead
+		// would hand back a different index and leave every material that named the old
+		// one still naming it.
+		//
+		// Texture handles are recycled, so the outgoing one may already have been handed
+		// back out and registered against a different slot. Dropping its lookup entry
+		// unconditionally would delete that slot's entry instead of this one's.
+		const auto outgoing = textureIndices_.find(texturesByIndex_[textureIndex]);
+		if (outgoing != textureIndices_.end() && outgoing->second == textureIndex)
+			textureIndices_.erase(outgoing);
+
+		texturesByIndex_[textureIndex] = texture;
+		textureIndices_[texture] = textureIndex;
+
+		rhi_->updateBindGroupTexture(bindlessBindGroup_, kTextureArrayBinding, textureIndex, texture);
 	}
 
 	void MaterialSystem::setTextureMipRange(u32 textureIndex, u32 baseMip)

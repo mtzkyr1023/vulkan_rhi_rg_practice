@@ -6,7 +6,9 @@
 #   - the Windows SDK's dxc ships dxil.dll, so it can *sign* DXIL; unsigned DXIL is
 #     rejected by D3D12 unless the machine is in developer mode
 #
-# Entry points are fixed: VSMain / PSMain.
+# Entry points are fixed: VSMain / PSMain / CSMain. A file is compiled for a stage only if
+# it actually declares that stage's entry point, so a compute-only shader does not have to
+# carry a dummy vertex shader and vice versa.
 
 $ErrorActionPreference = "Stop"
 
@@ -28,11 +30,18 @@ Write-Host "dxil  dxc: $dxilDxc"
 # 6.6 for the resource indexing used by the bindless texture array.
 $stages = @(
     @{ Entry = "VSMain"; Profile = "vs_6_6"; Suffix = "vs" },
-    @{ Entry = "PSMain"; Profile = "ps_6_6"; Suffix = "ps" }
+    @{ Entry = "PSMain"; Profile = "ps_6_6"; Suffix = "ps" },
+    @{ Entry = "CSMain"; Profile = "cs_6_6"; Suffix = "cs" }
 )
 
 foreach ($hlsl in Get-ChildItem $shaderDir -Filter *.hlsl) {
+    $source = Get-Content $hlsl.FullName -Raw
+
     foreach ($stage in $stages) {
+        # The entry point has to be declared in this file, not merely included from a
+        # header: dxc would otherwise be asked for a stage the file does not have.
+        if ($source -notmatch "\b$($stage.Entry)\s*\(") { continue }
+
         $base = Join-Path $shaderDir "$($hlsl.BaseName).$($stage.Suffix)"
 
         # MV_TARGET_VULKAN selects the [[vk::push_constant]] declaration; the DXIL build

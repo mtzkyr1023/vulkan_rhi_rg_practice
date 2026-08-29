@@ -84,6 +84,9 @@ namespace mv
 			eTransferSrc,
 			eTransferDst,
 
+			// Read by the GPU front end as draw arguments. Buffers only.
+			eIndirectArgument,
+
 			ePresent,
 		};
 
@@ -101,6 +104,14 @@ namespace mv
 
 			// Visibility buffer target: an integer pair, never filtered or blended.
 			eR32G32_UINT,
+
+			// Environment radiance: the sky runs far above one around the sun, and a UNORM
+			// format would clip away the part that dominates both reflections and the
+			// spherical harmonic coefficients.
+			eR16G16B16A16_SFLOAT,
+
+			// Screen-space motion, which needs sign and sub-pixel precision but not range.
+			eR16G16_SFLOAT,
 		};
 
 		struct BufferDesc
@@ -121,15 +132,42 @@ namespace mv
 			// 0 means a full chain down to 1x1; 1 means no mips at all.
 			u32 mipLevels = 1;
 
+			// 6 for a cube map, which must also set `cube`. Both APIs treat a cube as an
+			// array of six faces and differ only in how the view declares it.
+			u32 arrayLayers = 1;
+
+			// Makes the six layers addressable by direction rather than by index.
+			bool cube = false;
+
+			// Makes `depth` a third dimension rather than the trivial 1 a 2D image carries.
+			// A volume filters along all three axes, which is the whole point of using one:
+			// a stack of slices would band as a ray crosses between them.
+			bool volume = false;
+
 			ETextureFormat format;
 			EMemoryType memoryType;
 		};
 
-		// One mip level of source data for uploadTexture.
+		// One mip level of one array layer, for uploadTexture. An array or cube texture
+		// passes them layer-major: every mip of layer 0, then every mip of layer 1, which is
+		// the order both APIs lay their subresources out in.
 		struct TextureUpload
 		{
 			const void* data = nullptr;
 			u64 size = 0;
+		};
+
+		// The face order both APIs agree on: +X, -X, +Y, -Y, +Z, -Z.
+		enum ECubeFace
+		{
+			eCubePosX = 0,
+			eCubeNegX,
+			eCubePosY,
+			eCubeNegY,
+			eCubePosZ,
+			eCubeNegZ,
+
+			eCubeFaceCount,
 		};
 
 		inline u32 mipLevelsFor(u32 width, u32 height)
@@ -143,6 +181,33 @@ namespace mv
 			}
 
 			return levels;
+		}
+
+		// Whether a texture that was freed can be handed back to satisfy a new request.
+		//
+		// Every field that changes the resource or the views built over it has to match.
+		// Size and format alone are not enough: a texture created as sampled-only has no
+		// render target view and no attachment flag, so handing it to something that wants
+		// to render into it produces a resource that looks right and cannot be drawn to.
+		inline bool textureDescMatches(const TextureDesc& existing, const TextureDesc& wanted)
+		{
+			// A request of zero means a full chain, which the stored desc has already
+			// resolved to a count.
+			const u32 wantedMips = wanted.mipLevels ? wanted.mipLevels : mipLevelsFor(wanted.width, wanted.height);
+
+			const u32 existingLayers = existing.arrayLayers ? existing.arrayLayers : 1;
+			const u32 wantedLayers = wanted.arrayLayers ? wanted.arrayLayers : 1;
+
+			return existing.memoryType == wanted.memoryType
+				&& existing.format == wanted.format
+				&& existing.width == wanted.width
+				&& existing.height == wanted.height
+				&& existing.depth == wanted.depth
+				&& existing.usage == wanted.usage
+				&& existing.mipLevels == wantedMips
+				&& existingLayers == wantedLayers
+				&& existing.volume == wanted.volume
+				&& existing.cube == wanted.cube;
 		}
 
 		struct TextureBarrier

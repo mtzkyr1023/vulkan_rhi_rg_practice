@@ -40,17 +40,38 @@ PageLocation unpackPage(uint entry)
 	return page;
 }
 
-// The mip the gradients ask for, in the virtual texture's own level numbering. Identical
-// to what the hardware would compute for the source texture, which is the point: the
-// virtualised path has to choose the same level the direct path would have.
-float virtualLod(VirtualTextureInfo vt, float2 uvDdx, float2 uvDdy)
+// The mip the gradients ask for, in the virtual texture's own level numbering.
+//
+// The isotropic choice is the major axis, which is what keeps a grazing surface from
+// aliasing and also what makes it far blurrier than it needs to be: the minor axis still
+// has detail the major one has thrown away. Anisotropic hardware picks the minor axis and
+// takes several taps along the major one to compensate.
+//
+// The same trick is available here, but it is not free the way it is for a plain texture:
+// a finer level means smaller pages covering the same surface, so the number of pages a
+// view demands rises with it. maxAnisotropy is the cap on that trade, and it is why this
+// is a slider rather than a constant.
+float virtualLod(VirtualTextureInfo vt, float2 uvDdx, float2 uvDdy, float maxAnisotropy)
 {
 	float2 virtualSize = float2(vt.pagesX, vt.pagesY) * MV_VT_PAGE_SIZE;
 
 	float2 dx = uvDdx * virtualSize;
 	float2 dy = uvDdy * virtualSize;
 
-	return 0.5f * log2(max(dot(dx, dx), dot(dy, dy)));
+	float majorLengthSq = max(dot(dx, dx), dot(dy, dy));
+	float minorLengthSq = min(dot(dx, dx), dot(dy, dy));
+
+	float majorLod = 0.5f * log2(majorLengthSq);
+
+	if (maxAnisotropy <= 1.0f)
+		return majorLod;
+
+	// How elongated the footprint is, capped, and expressed as levels of refinement: an
+	// aspect of four is two levels finer than the isotropic choice.
+	float ratio = sqrt(majorLengthSq / max(minorLengthSq, 1e-8f));
+	float levels = log2(min(ratio, maxAnisotropy));
+
+	return majorLod - levels;
 }
 
 // Translates a virtual coordinate into the atlas. Returns false when the page is not
@@ -138,7 +159,7 @@ float4 sampleVirtual(uint textureIndex, float2 uv, float2 uvDdx, float2 uvDdy)
 	if (vt.levelCount == 0u)
 		return textures[NonUniformResourceIndex(textureIndex)].SampleGrad(sourceSampler, uv, uvDdx, uvDdy);
 
-	float lod = virtualLod(vt, uvDdx, uvDdy);
+	float lod = virtualLod(vt, uvDdx, uvDdy, vtMaxAnisotropy);
 
 	// Past the last virtualised level the source texture is the rest of the chain, and it
 	// still has its own mips, so handing it the original gradients gives the right result.
@@ -175,7 +196,7 @@ uint2 virtualDebugPage(uint textureIndex, float2 uv, float2 uvDdx, float2 uvDdy,
 	if (vt.levelCount == 0u)
 		return uint2(0, 0);
 
-	float lod = virtualLod(vt, uvDdx, uvDdy);
+	float lod = virtualLod(vt, uvDdx, uvDdy, vtMaxAnisotropy);
 	if (lod > (float)(vt.levelCount - 1u))
 		return uint2(0, 0);
 

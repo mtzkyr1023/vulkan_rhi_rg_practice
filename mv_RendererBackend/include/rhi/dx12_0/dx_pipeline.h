@@ -152,6 +152,7 @@ namespace mv
 			{
 			public:
 				void initialize(DxDevice* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc);
+				void initializeCompute(DxDevice* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC& desc);
 				void deinitialize();
 
 				ID3D12PipelineState* pipelineState() const { return pipelineState_.Get(); }
@@ -180,6 +181,7 @@ namespace mv
 
 				rhi::PipelineLayoutHandle createPipelineLayout(const rhi::PipelineLayoutDesc& desc) override;
 				rhi::PipelineHandle createPipeline(const rhi::GraphicsPipelineDesc& desc) override;
+				rhi::PipelineHandle createComputePipeline(const rhi::ComputePipelineDesc& desc) override;
 
 				const DxPipelineLayout& layout(rhi::PipelineLayoutHandle handle) const { return layouts_[handle]; }
 				const DxPipeline& pipeline(rhi::PipelineHandle handle) const { return pipelines_[handle]; }

@@ -54,8 +54,16 @@ namespace mv
 
 				VkCommandBuffer commandBuffer() const { return commandBuffer_; }
 
+				// Which bind point the following descriptor set binds belong to. Vulkan
+				// names it in every call rather than keeping it as state, so this only
+				// exists so the RHI can present one bindBindGroup to both.
+				bool isComputeBindPoint() const { return computeBindPoint_; }
+				void setComputeBindPoint(bool compute) { computeBindPoint_ = compute; }
+
 			private:
 				VkCommandBuffer commandBuffer_ = VK_NULL_HANDLE;
+
+				bool computeBindPoint_ = false;
 
 				VulkanDevice* device_ = nullptr;
 				VulkanCommandPool* commandPool_ = nullptr;

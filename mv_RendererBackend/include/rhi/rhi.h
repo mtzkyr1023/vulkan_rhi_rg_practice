@@ -47,10 +47,24 @@ namespace mv
 
 			virtual void draw(CommandBufferHandle cmd, u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) = 0;
 
+			// Draw whose arguments live in a buffer a shader filled: sixteen bytes laid out
+			// as vertexCount, instanceCount, firstVertex, firstInstance, which is the one
+			// layout both APIs happen to agree on. The buffer needs eIndirectArgs usage and
+			// the eIndirectArgument state when the draw reads it.
+			virtual void drawIndirect(CommandBufferHandle cmd, BufferHandle args, u64 offset) = 0;
+
 			// The two backends do not necessarily agree on a swap chain format, and a pipeline's
 			// render target formats must match the attachment it renders to, so callers building
 			// pipelines for the backbuffer have to ask rather than assume.
 			virtual ETextureFormat backbufferFormat() const = 0;
+
+			// Rebuilds the swap chain at a new size, keeping the backbuffer handles stable so
+			// anything holding one stays valid. Waits for the GPU first: the buffers being
+			// replaced may still be on screen or in flight.
+			//
+			// Everything else that was sized to the window is the caller's problem. The RHI
+			// has no idea which of its textures were meant to track it.
+			virtual void resize(u32 width, u32 height) = 0;
 
 			// Callers that keep per-frame copies of a resource need to know how many.
 			u32 framesInFlight() const { return framesInFlight_; }
@@ -95,6 +109,51 @@ namespace mv
 				TextureHandle texture,
 				u32 baseMip = 0,
 				u32 mipCount = 0) = 0;
+
+			// Records outside a frame, for work that happens when an asset is built rather
+			// than when one is drawn: generating a mip chain, baking a sky, turning a
+			// heightmap into vertices. The upload paths already did this privately; a
+			// compute pass that runs at load time needs the same thing, and needs it in
+			// terms of the public command interface.
+			//
+			// endImmediateCommands submits and waits, so anything recorded is complete by
+			// the time it returns. That is a full pipeline stall, which is exactly right at
+			// load time and exactly wrong per frame.
+			virtual CommandBufferHandle beginImmediateCommands() = 0;
+			virtual void endImmediateCommands(CommandBufferHandle cmd) = 0;
+
+			virtual PipelineHandle createComputePipeline(const ComputePipelineDesc& desc) = 0;
+
+			// Compute is its own bind point. Vulkan spells that out in every call; D3D12
+			// keeps a separate root signature and descriptor tables for it on the same
+			// command list, so binding a compute pipeline is what switches the rest of the
+			// binding calls over to it.
+			virtual void bindComputePipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0;
+
+			// Thread *groups*, not threads. The group size lives in the shader.
+			virtual void dispatch(CommandBufferHandle cmd, u32 groupsX, u32 groupsY, u32 groupsZ) = 0;
+
+			// Re-points one writable-image binding. Generating a mip chain rebinds the same
+			// slot to each level in turn rather than declaring one descriptor per level.
+			virtual void updateBindGroupStorageTexture(
+				BindGroupHandle group,
+				u32 binding,
+				u32 arrayIndex,
+				TextureHandle texture,
+				u32 mipLevel) = 0;
+
+			// Re-points one buffer binding of an existing group. The counterpart to the
+			// texture version, for geometry that is regenerated rather than streamed: the
+			// visibility buffer resolves triangles out of whatever vertex and index buffers
+			// this names, so swapping scenes means swapping these rather than rebuilding
+			// the group and every descriptor in it.
+			virtual void updateBindGroupBuffer(
+				BindGroupHandle group,
+				u32 binding,
+				BufferHandle buffer,
+				u64 offset,
+				u32 stride,
+				u32 count) = 0;
 
 			// GPU-side copy, for pulling a shader-written buffer into readback memory.
 			// Inserts the barrier that orders it after those writes.

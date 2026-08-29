@@ -29,7 +29,7 @@ namespace mv::material
 		pipelineDesc.layoutHandle = desc_.layout;
 		pipelineDesc.topology = rhi::EPrimitiveTopology::eTriangleList;
 		pipelineDesc.vertexLayout = desc_.vertexLayout;
-		pipelineDesc.colorFormats.push_back(desc_.colorFormat);
+		pipelineDesc.colorFormats = desc_.colorFormats;
 		pipelineDesc.depthFormat = desc_.depthFormat;
 
 		// glTF's winding is counter-clockwise when a front face is viewed from outside.

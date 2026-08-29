@@ -33,7 +33,13 @@ VSOutput VSMain(VSInput input)
 	return output;
 }
 
-float4 PSMain(VSOutput input) : SV_TARGET
+struct ModelOutput
+{
+	float4 color    : SV_TARGET0;
+	float2 velocity : SV_TARGET1;
+};
+
+ModelOutput PSMain(VSOutput input)
 {
 	SurfaceInput surface;
 	surface.material = materials[drawConstants.materialIndex];
@@ -50,5 +56,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
 	// Alpha masking, before any of the lighting work is done.
 	clip(baseColor.a - surface.material.alphaCutoff);
 
-	return shadeSurface(surface, baseColor);
+	ModelOutput output;
+	output.color = shadeSurface(surface, baseColor);
+	output.velocity = computeVelocity(input.worldPosition, input.position.xy / viewportSize);
+
+	return output;
 }

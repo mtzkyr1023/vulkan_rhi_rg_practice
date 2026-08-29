@@ -38,10 +38,27 @@ namespace mv
 				ID3D12RootSignature* boundRootSignature() const { return boundRootSignature_; }
 				void setBoundRootSignature(ID3D12RootSignature* rootSignature) { boundRootSignature_ = rootSignature; }
 
+				// Graphics and compute are separate root signature slots on one command
+				// list. Setting one says nothing about the other, so changing bind point
+				// forgets what was cached: the same signature object still has to be set
+				// again on the side that has not seen it.
+				bool isComputeBindPoint() const { return computeBindPoint_; }
+
+				void setComputeBindPoint(bool compute)
+				{
+					if (computeBindPoint_ != compute)
+					{
+						computeBindPoint_ = compute;
+						boundRootSignature_ = nullptr;
+					}
+				}
+
 			private:
 				wrl::ComPtr<ID3D12GraphicsCommandList> commandList_;
 
 				ID3D12RootSignature* boundRootSignature_ = nullptr;
+
+				bool computeBindPoint_ = false;
 			};
 
 			class DxCommandPool : public rhi::ICommandPool

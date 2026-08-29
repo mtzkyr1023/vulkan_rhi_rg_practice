@@ -21,6 +21,7 @@ namespace mv
 			class VulkanDevice;
 
 			VkFormat toVkFormat(rhi::ETextureFormat format);
+			VkFormat toVkStorageFormat(rhi::ETextureFormat format);
 			rhi::ETextureFormat fromVkFormat(VkFormat format);
 
 			class VulkanShader
@@ -105,6 +106,7 @@ namespace mv
 			{
 			public:
 				void initialize(VkDevice device, const VkGraphicsPipelineCreateInfo& ci);
+				void initializeCompute(VkDevice device, const VkComputePipelineCreateInfo& ci);
 				void deinitialize(VkDevice device);
 
 				VkPipeline pipeline() const { return pipeline_; }
@@ -123,6 +125,7 @@ namespace mv
 
 				rhi::PipelineLayoutHandle createPipelineLayout(const rhi::PipelineLayoutDesc& desc) override;
 				rhi::PipelineHandle createPipeline(const rhi::GraphicsPipelineDesc& desc) override;
+				rhi::PipelineHandle createComputePipeline(const rhi::ComputePipelineDesc& desc) override;
 
 				const VulkanPipelineLayout& layout(rhi::PipelineLayoutHandle handle) const { return layouts_[handle]; }
 				const VulkanPipeline& pipeline(rhi::PipelineHandle handle) const { return pipelines_[handle]; }

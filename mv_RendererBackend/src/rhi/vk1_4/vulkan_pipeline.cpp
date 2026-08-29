@@ -15,8 +15,24 @@ namespace mv::backend::vk1_4
 		case rhi::ETextureFormat::eD32_SFLOAT:         return VK_FORMAT_D32_SFLOAT;
 		case rhi::ETextureFormat::eD24_UNORM_S8_UINT:  return VK_FORMAT_D24_UNORM_S8_UINT;
 		case rhi::ETextureFormat::eR32G32_UINT:        return VK_FORMAT_R32G32_UINT;
+		case rhi::ETextureFormat::eR16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+		case rhi::ETextureFormat::eR16G16_SFLOAT:      return VK_FORMAT_R16G16_SFLOAT;
 		case rhi::ETextureFormat::eUndefined:
 		default:                                       return VK_FORMAT_UNDEFINED;
+		}
+	}
+
+	// The format a storage-image view of this texture has to use.
+	//
+	// Vulkan lists no sRGB format as storage-capable, so a shader that writes an sRGB
+	// texture writes the UNORM twin of it through a second view and applies the transfer
+	// function itself. Everything else is its own storage format.
+	VkFormat toVkStorageFormat(rhi::ETextureFormat format)
+	{
+		switch (format)
+		{
+		case rhi::ETextureFormat::eR8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_UNORM;
+		default:                                  return toVkFormat(format);
 		}
 	}
 
@@ -30,6 +46,8 @@ namespace mv::backend::vk1_4
 		case VK_FORMAT_D32_SFLOAT:         return rhi::ETextureFormat::eD32_SFLOAT;
 		case VK_FORMAT_D24_UNORM_S8_UINT:  return rhi::ETextureFormat::eD24_UNORM_S8_UINT;
 		case VK_FORMAT_R32G32_UINT:        return rhi::ETextureFormat::eR32G32_UINT;
+		case VK_FORMAT_R16G16B16A16_SFLOAT: return rhi::ETextureFormat::eR16G16B16A16_SFLOAT;
+		case VK_FORMAT_R16G16_SFLOAT:      return rhi::ETextureFormat::eR16G16_SFLOAT;
 		default:                           return rhi::ETextureFormat::eUndefined;
 		}
 	}
@@ -195,7 +213,11 @@ namespace mv::backend::vk1_4
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 			VK_DESCRIPTOR_TYPE_SAMPLER,
+			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 		};
+
+		static_assert((u32)rhi::EDescriptorType::eStorageImage + 1 == std::size(descTypeTable),
+			"descTypeTable must stay in step with EDescriptorType");
 
 		std::vector<VkDescriptorBindingFlags> bindingFlags;
 		bool anyBindless = false;
@@ -283,7 +305,9 @@ namespace mv::backend::vk1_4
 	void VulkanPipelineLayout::initialize(VkDevice device, const std::vector<VkDescriptorSetLayout>& layouts, u32 pushConstantSize)
 	{
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+		// ALL rather than ALL_GRAPHICS: the same layout is used by compute passes, and a
+		// range that does not name the compute stage cannot be pushed from one.
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
 		pushConstantRange.offset = 0;
 		pushConstantRange.size = pushConstantSize;
 
@@ -306,6 +330,11 @@ namespace mv::backend::vk1_4
 	void VulkanPipeline::initialize(VkDevice device, const VkGraphicsPipelineCreateInfo& ci)
 	{
 		vkCreateGraphicsPipelines(device, cache_, 1, &ci, nullptr, &pipeline_);
+	}
+
+	void VulkanPipeline::initializeCompute(VkDevice device, const VkComputePipelineCreateInfo& ci)
+	{
+		vkCreateComputePipelines(device, cache_, 1, &ci, nullptr, &pipeline_);
 	}
 
 	void VulkanPipeline::deinitialize(VkDevice device)
@@ -436,6 +465,9 @@ namespace mv::backend::vk1_4
 			.polygonMode = (desc.rasterizer.polygonMode == rhi::EPolygonMode::eWireframe) ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL,
 			.cullMode = toVkCullMode(desc.rasterizer.cullMode),
 			.frontFace = (desc.rasterizer.frontFace == rhi::EFrontFace::eClockwise) ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE,
+			.depthBiasEnable = (desc.rasterizer.depthBiasConstant != 0.0f || desc.rasterizer.depthBiasSlope != 0.0f) ? VK_TRUE : VK_FALSE,
+			.depthBiasConstantFactor = desc.rasterizer.depthBiasConstant,
+			.depthBiasSlopeFactor = desc.rasterizer.depthBiasSlope,
 			.lineWidth = 1.0f,
 		};
 
@@ -507,6 +539,25 @@ namespace mv::backend::vk1_4
 
 		VulkanPipeline pipeline;
 		pipeline.initialize(device_->device(), ci);
+
+		rhi::PipelineHandle handle = (u32)pipelines_.size();
+		pipelines_.push_back(pipeline);
+
+		return handle;
+	}
+
+	rhi::PipelineHandle VulkanPipelineManager::createComputePipeline(const rhi::ComputePipelineDesc& desc)
+	{
+		VkComputePipelineCreateInfo ci{};
+		ci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		ci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		ci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		ci.stage.module = shaderManager_->shader(desc.cs).module();
+		ci.stage.pName = shaderManager_->shader(desc.cs).entryPoint();
+		ci.layout = layouts_[desc.layoutHandle].layout();
+
+		VulkanPipeline pipeline;
+		pipeline.initializeCompute(device_->device(), ci);
 
 		rhi::PipelineHandle handle = (u32)pipelines_.size();
 		pipelines_.push_back(pipeline);

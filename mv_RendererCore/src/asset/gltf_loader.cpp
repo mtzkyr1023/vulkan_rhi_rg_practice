@@ -246,39 +246,17 @@ namespace mv::asset
 		return handle;
 	}
 
-	bool GltfLoader::load(
+	u32 GltfLoader::registerMaterials(
 		const std::shared_ptr<rhi::IRHI>& rhi,
 		material::MaterialSystem& materialSystem,
-		const std::string& path,
-		Model& outModel)
+		const cgltf_data* data,
+		const std::string& baseDirectory,
+		std::vector<material::MaterialHandle>& outMaterials,
+		u32& outTextureCount)
 	{
-		cgltf_options options{};
-		cgltf_data* data = nullptr;
-
-		if (cgltf_parse_file(&options, path.c_str(), &data) != cgltf_result_success)
-			return false;
-
-		// Pulls in external .bin files and, for .glb, points the buffers at the embedded
-		// chunk. Without this the accessors have nothing to read.
-		if (cgltf_load_buffers(&options, data, path.c_str()) != cgltf_result_success)
-		{
-			cgltf_free(data);
-			return false;
-		}
-
-		outModel.boundsMin = { FLT_MAX, FLT_MAX, FLT_MAX };
-		outModel.boundsMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-
-		// External image URIs are relative to the document, not to the working directory.
-		std::string baseDirectory = path;
-		const size_t slash = baseDirectory.find_last_of("/\\");
-		baseDirectory = (slash == std::string::npos) ? std::string() : baseDirectory.substr(0, slash + 1);
-
-		// --- materials -------------------------------------------------------------
-
 		std::unordered_map<const cgltf_image*, rhi::TextureHandle> textureCache;
-		std::vector<material::MaterialHandle> materials;
-		materials.reserve(data->materials_count + 1);
+
+		outMaterials.reserve(data->materials_count + 1);
 
 		for (cgltf_size i = 0; i < data->materials_count; i++)
 		{
@@ -340,22 +318,63 @@ namespace mv::asset
 				}
 			}
 
-			materials.push_back(materialSystem.createMaterial(desc));
+			outMaterials.push_back(materialSystem.createMaterial(desc));
 		}
 
 		// Primitives with no material fall back to this one, appended last.
-		const u32 defaultMaterialIndex = (u32)materials.size();
+		const u32 defaultMaterialIndex = (u32)outMaterials.size();
 		{
 			material::MaterialDesc desc{};
 			// An untextured default reads better as a rough dielectric than as a mirror.
 			desc.constants.metallicFactor = 0.0f;
 			desc.constants.roughnessFactor = 0.8f;
 
-			materials.push_back(materialSystem.createMaterial(desc));
+			outMaterials.push_back(materialSystem.createMaterial(desc));
 		}
 
+		outTextureCount = (u32)textureCache.size();
+
+		return defaultMaterialIndex;
+	}
+
+	bool GltfLoader::load(
+		const std::shared_ptr<rhi::IRHI>& rhi,
+		material::MaterialSystem& materialSystem,
+		const std::string& path,
+		Model& outModel)
+	{
+		cgltf_options options{};
+		cgltf_data* data = nullptr;
+
+		if (cgltf_parse_file(&options, path.c_str(), &data) != cgltf_result_success)
+			return false;
+
+		// Pulls in external .bin files and, for .glb, points the buffers at the embedded
+		// chunk. Without this the accessors have nothing to read.
+		if (cgltf_load_buffers(&options, data, path.c_str()) != cgltf_result_success)
+		{
+			cgltf_free(data);
+			return false;
+		}
+
+		outModel.boundsMin = { FLT_MAX, FLT_MAX, FLT_MAX };
+		outModel.boundsMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+		// External image URIs are relative to the document, not to the working directory.
+		std::string baseDirectory = path;
+		const size_t slash = baseDirectory.find_last_of("/\\");
+		baseDirectory = (slash == std::string::npos) ? std::string() : baseDirectory.substr(0, slash + 1);
+
+		// --- materials -------------------------------------------------------------
+
+		std::vector<material::MaterialHandle> materials;
+		u32 textureCount = 0;
+
+		const u32 defaultMaterialIndex =
+			registerMaterials(rhi, materialSystem, data, baseDirectory, materials, textureCount);
+
 		outModel.materialCount = (u32)materials.size();
-		outModel.textureCount = (u32)textureCache.size();
+		outModel.textureCount = textureCount;
 
 		// --- geometry --------------------------------------------------------------
 
@@ -498,6 +517,9 @@ namespace mv::asset
 		outModel.indexBuffer = rhi->createBuffer(indexDesc);
 		rhi->uploadBuffer(outModel.indexBuffer, mergedIndices.data(), indexDesc.size);
 
+		if (retainGeometry_)
+			outModel.cpuVertices = std::move(mergedVertices);
+
 		// Blended geometry has to come after everything it can show through. Sorting the
 		// rest by material as well keeps pipeline and bind group changes down.
 		std::stable_sort(
@@ -518,6 +540,311 @@ namespace mv::asset
 			});
 
 		return !outModel.primitives.empty();
+	}
+
+	bool GltfLoader::loadSkinned(
+		const std::shared_ptr<rhi::IRHI>& rhi,
+		material::MaterialSystem& materialSystem,
+		const std::string& path,
+		SkinnedModel& outModel)
+	{
+		cgltf_options options{};
+		cgltf_data* data = nullptr;
+
+		if (cgltf_parse_file(&options, path.c_str(), &data) != cgltf_result_success)
+		{
+			OutputDebugStringA("loadSkinned: parse failed\n");
+			return false;
+		}
+
+		if (cgltf_load_buffers(&options, data, path.c_str()) != cgltf_result_success)
+		{
+			OutputDebugStringA("loadSkinned: buffers failed\n");
+			cgltf_free(data);
+			return false;
+		}
+
+		if (data->skins_count == 0)
+		{
+			OutputDebugStringA("loadSkinned: no skins\n");
+			cgltf_free(data);
+			return false;
+		}
+
+		std::string baseDirectory = path;
+		const size_t slash = baseDirectory.find_last_of("/\\");
+		baseDirectory = (slash == std::string::npos) ? std::string() : baseDirectory.substr(0, slash + 1);
+
+		std::vector<material::MaterialHandle> materials;
+		u32 textureCount = 0;
+
+		const u32 defaultMaterialIndex =
+			registerMaterials(rhi, materialSystem, data, baseDirectory, materials, textureCount);
+
+		// --- skeleton --------------------------------------------------------------
+
+		// One skin per model is all this supports, which is all the assets have.
+		const cgltf_skin& skin = data->skins[0];
+
+		std::unordered_map<const cgltf_node*, u32> jointIndexOf;
+
+		for (cgltf_size j = 0; j < skin.joints_count; j++)
+			jointIndexOf.emplace(skin.joints[j], (u32)j);
+
+		outModel.joints.resize(skin.joints_count);
+
+		for (cgltf_size j = 0; j < skin.joints_count; j++)
+		{
+			const cgltf_node* node = skin.joints[j];
+			SkinnedJoint& joint = outModel.joints[j];
+
+			const auto parent = node->parent ? jointIndexOf.find(node->parent) : jointIndexOf.end();
+			joint.parent = parent != jointIndexOf.end() ? (s32)parent->second : -1;
+
+			// glTF's column-major column-vector matrix is byte-for-byte this codebase's
+			// row-major row-vector one -- the same transpose-of-a-transpose that makes
+			// Bullet's getOpenGLMatrix a straight copy.
+			if (skin.inverse_bind_matrices)
+			{
+				f32 raw[16];
+				cgltf_accessor_read_float(skin.inverse_bind_matrices, j, raw, 16);
+				std::memcpy(joint.inverseBind.m, raw, sizeof(raw));
+			}
+
+			if (node->has_translation)
+				joint.baseTranslation = { node->translation[0], node->translation[1], node->translation[2] };
+
+			if (node->has_rotation)
+				joint.baseRotation = { node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3] };
+
+			if (node->has_scale)
+				joint.baseScale = { node->scale[0], node->scale[1], node->scale[2] };
+		}
+
+		// Parents before children: glTF's joint array promises nothing, and global
+		// transforms are a single linear pass once this order exists.
+		{
+			std::vector<bool> placed(outModel.joints.size(), false);
+
+			outModel.jointOrder.reserve(outModel.joints.size());
+
+			while (outModel.jointOrder.size() < outModel.joints.size())
+			{
+				const size_t before = outModel.jointOrder.size();
+
+				for (u32 j = 0; j < (u32)outModel.joints.size(); j++)
+				{
+					const s32 parent = outModel.joints[j].parent;
+
+					if (!placed[j] && (parent < 0 || placed[parent]))
+					{
+						outModel.jointOrder.push_back(j);
+						placed[j] = true;
+					}
+				}
+
+				// A cycle would spin forever; a skeleton with one is not worth loading.
+				if (outModel.jointOrder.size() == before)
+				{
+					OutputDebugStringA("loadSkinned: joint cycle\n");
+					cgltf_free(data);
+					return false;
+				}
+			}
+		}
+
+		// --- animations ------------------------------------------------------------
+
+		for (cgltf_size a = 0; a < data->animations_count; a++)
+		{
+			const cgltf_animation& animation = data->animations[a];
+
+			AnimClip clip{};
+			clip.name = animation.name ? animation.name : ("clip " + std::to_string(a));
+
+			for (cgltf_size c = 0; c < animation.channels_count; c++)
+			{
+				const cgltf_animation_channel& source = animation.channels[c];
+
+				const auto joint = jointIndexOf.find(source.target_node);
+
+				if (joint == jointIndexOf.end() || source.sampler == nullptr)
+					continue;
+
+				EAnimPath channelPath;
+				u32 stride;
+
+				switch (source.target_path)
+				{
+				case cgltf_animation_path_type_translation: channelPath = EAnimPath::eTranslation; stride = 3; break;
+				case cgltf_animation_path_type_rotation:    channelPath = EAnimPath::eRotation; stride = 4; break;
+				case cgltf_animation_path_type_scale:       channelPath = EAnimPath::eScale; stride = 3; break;
+				default: continue;
+				}
+
+				AnimChannel channel{};
+				channel.joint = joint->second;
+				channel.path = channelPath;
+
+				const cgltf_accessor* input = source.sampler->input;
+				const cgltf_accessor* output = source.sampler->output;
+
+				channel.times.resize(input->count);
+				channel.values.resize(output->count * stride);
+
+				for (cgltf_size k = 0; k < input->count; k++)
+					cgltf_accessor_read_float(input, k, &channel.times[k], 1);
+
+				// Cubic samplers store in/value/out triplets; reading only the value
+				// keys and lerping them is the cheap approximation this settles for.
+				for (cgltf_size k = 0; k < output->count; k++)
+					cgltf_accessor_read_float(output, k, &channel.values[k * stride], stride);
+
+				if (!channel.times.empty())
+					clip.duration = (std::max)(clip.duration, channel.times.back());
+
+				clip.channels.push_back(std::move(channel));
+			}
+
+			if (!clip.channels.empty())
+				outModel.clips.push_back(std::move(clip));
+		}
+
+		// --- geometry --------------------------------------------------------------
+
+		// Mesh space, raw: the spec says a skinned mesh ignores its node's transform
+		// -- the joints alone place every vertex.
+		outModel.boundsMin = { FLT_MAX, FLT_MAX, FLT_MAX };
+		outModel.boundsMax = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+
+		std::vector<SkinnedVertex> mergedVertices;
+		std::vector<u32> mergedIndices;
+		std::vector<u32> indices;
+
+		for (cgltf_size n = 0; n < data->nodes_count; n++)
+		{
+			const cgltf_node& node = data->nodes[n];
+
+			if (!node.mesh || !node.skin)
+				continue;
+
+			for (cgltf_size p = 0; p < node.mesh->primitives_count; p++)
+			{
+				const cgltf_primitive& primitive = node.mesh->primitives[p];
+
+				// No index requirement here, unlike load(): the Khronos Fox -- the one
+				// skinned sample everyone reaches for first -- ships non-indexed, and
+				// sequential indices are one line to synthesise.
+				if (primitive.type != cgltf_primitive_type_triangles)
+					continue;
+
+				const cgltf_accessor* positionAccessor = nullptr;
+				const cgltf_accessor* normalAccessor = nullptr;
+				const cgltf_accessor* uvAccessor = nullptr;
+				const cgltf_accessor* jointsAccessor = nullptr;
+				const cgltf_accessor* weightsAccessor = nullptr;
+
+				for (cgltf_size at = 0; at < primitive.attributes_count; at++)
+				{
+					const cgltf_attribute& attribute = primitive.attributes[at];
+
+					if (attribute.type == cgltf_attribute_type_position) positionAccessor = attribute.data;
+					else if (attribute.type == cgltf_attribute_type_normal) normalAccessor = attribute.data;
+					else if (attribute.type == cgltf_attribute_type_texcoord && attribute.index == 0) uvAccessor = attribute.data;
+					else if (attribute.type == cgltf_attribute_type_joints && attribute.index == 0) jointsAccessor = attribute.data;
+					else if (attribute.type == cgltf_attribute_type_weights && attribute.index == 0) weightsAccessor = attribute.data;
+				}
+
+				if (!positionAccessor || !jointsAccessor || !weightsAccessor)
+					continue;
+
+				const u32 vertexOffset = (u32)mergedVertices.size();
+				const cgltf_size vertexCount = positionAccessor->count;
+
+				for (cgltf_size v = 0; v < vertexCount; v++)
+				{
+					SkinnedVertex vertex{};
+
+					cgltf_accessor_read_float(positionAccessor, v, vertex.position, 3);
+
+					accumulateBounds(
+						{ vertex.position[0], vertex.position[1], vertex.position[2] },
+						outModel.boundsMin, outModel.boundsMax);
+
+					vertex.normal[1] = 1.0f;
+
+					if (normalAccessor)
+						cgltf_accessor_read_float(normalAccessor, v, vertex.normal, 3);
+
+					if (uvAccessor)
+						cgltf_accessor_read_float(uvAccessor, v, vertex.uv, 2);
+
+					// Indices as floats: exact for any joint count a vertex fetch meets,
+					// and eFloat4 exists on every backend where an int format may not.
+					cgltf_accessor_read_float(jointsAccessor, v, vertex.joints, 4);
+					cgltf_accessor_read_float(weightsAccessor, v, vertex.weights, 4);
+
+					mergedVertices.push_back(vertex);
+				}
+
+				const cgltf_size indexCount = primitive.indices ? primitive.indices->count : vertexCount;
+				indices.clear();
+				indices.resize(indexCount);
+
+				if (primitive.indices)
+				{
+					cgltf_accessor_unpack_indices(primitive.indices, indices.data(), sizeof(u32), indexCount);
+				}
+				else
+				{
+					for (cgltf_size i = 0; i < indexCount; i++)
+						indices[i] = (u32)i;
+				}
+
+				ModelPrimitive out{};
+				out.firstIndex = (u32)mergedIndices.size();
+				out.indexCount = (u32)indexCount;
+				out.material = primitive.material
+					? materials[cgltf_material_index(data, primitive.material)]
+					: materials[defaultMaterialIndex];
+
+				for (u32& index : indices)
+					index += vertexOffset;
+
+				mergedIndices.insert(mergedIndices.end(), indices.begin(), indices.end());
+
+				outModel.primitives.push_back(out);
+			}
+		}
+
+		cgltf_free(data);
+
+		if (mergedIndices.empty())
+		{
+			OutputDebugStringA("loadSkinned: no skinned geometry\n");
+			return false;
+		}
+
+		outModel.vertexCount = (u32)mergedVertices.size();
+		outModel.indexCount = (u32)mergedIndices.size();
+
+		rhi::BufferDesc vertexDesc{};
+		vertexDesc.size = mergedVertices.size() * sizeof(SkinnedVertex);
+		vertexDesc.usage = rhi::EBufferUsage::eVertex | rhi::EBufferUsage::eTransferDst;
+		vertexDesc.memoryType = rhi::EMemoryType::eDeviceLocalBuffer;
+
+		outModel.vertexBuffer = rhi->createBuffer(vertexDesc);
+		rhi->uploadBuffer(outModel.vertexBuffer, mergedVertices.data(), vertexDesc.size);
+
+		rhi::BufferDesc indexDesc{};
+		indexDesc.size = mergedIndices.size() * sizeof(u32);
+		indexDesc.usage = rhi::EBufferUsage::eIndex | rhi::EBufferUsage::eTransferDst;
+		indexDesc.memoryType = rhi::EMemoryType::eDeviceLocalBuffer;
+
+		outModel.indexBuffer = rhi->createBuffer(indexDesc);
+		rhi->uploadBuffer(outModel.indexBuffer, mergedIndices.data(), indexDesc.size);
+
+		return true;
 	}
 }
 

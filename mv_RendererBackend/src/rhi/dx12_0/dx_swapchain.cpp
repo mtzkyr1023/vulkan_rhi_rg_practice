@@ -1,3 +1,4 @@
+#include <stdexcept>
 
 #include "rhi/dx12_0/dx_swapchain.h"
 #include "rhi/dx12_0/dx_device.h"
@@ -34,6 +35,23 @@ namespace mv::backend::dx12_0
 	void DxSwapchain::deinitialize()
 	{
 		swapchain_.Reset();
+	}
+
+	void DxSwapchain::resize(u32 width, u32 height)
+	{
+		// Zero for the counts and the format means "keep what you have", which is what makes
+		// this a resize rather than a rebuild: the buffers are reallocated but nothing about
+		// the chain's configuration changes.
+		if (FAILED(swapchain_->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0)))
+		{
+			throw std::exception("Failed to resize swap chain buffers");
+		}
+
+		width_ = width;
+		height_ = height;
+
+		// The index is not preserved across a resize.
+		imageIndex_ = swapchain_->GetCurrentBackBufferIndex();
 	}
 
 	void DxSwapchain::present(ID3D12CommandQueue* queue)

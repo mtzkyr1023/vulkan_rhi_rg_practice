@@ -123,6 +123,7 @@ namespace mv::backend::dx12_0
 		// Read-only structured buffer, so an SRV rather than a UAV.
 		case rhi::EDescriptorType::eStorageBuffer:           return D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 		case rhi::EDescriptorType::eStorageBufferReadWrite:  return D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+		case rhi::EDescriptorType::eStorageImage:            return D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
 		case rhi::EDescriptorType::eSampler:        return D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
 		case rhi::EDescriptorType::eSampledImage:
 		default:                                    return D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -338,6 +339,16 @@ namespace mv::backend::dx12_0
 		rootSignature_ = desc.pRootSignature;
 	}
 
+	void DxPipeline::initializeCompute(DxDevice* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC& desc)
+	{
+		if (FAILED(device->device()->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pipelineState_))))
+		{
+			throw std::exception("Failed to create compute pipeline state");
+		}
+
+		rootSignature_ = desc.pRootSignature;
+	}
+
 	void DxPipeline::deinitialize()
 	{
 		pipelineState_.Reset();
@@ -489,9 +500,11 @@ namespace mv::backend::dx12_0
 		// Vulkan's counter-clockwise front face is D3D12's FrontCounterClockwise = TRUE.
 		ci.RasterizerState.FrontCounterClockwise = (desc.rasterizer.frontFace == rhi::EFrontFace::eCounterClockwise) ? TRUE : FALSE;
 		ci.RasterizerState.DepthClipEnable = desc.rasterizer.depthClampEnable ? FALSE : TRUE;
-		ci.RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+		// D3D12 takes the constant term as an integer count of the depth format's smallest
+		// representable step, which is the same unit Vulkan's constant factor uses.
+		ci.RasterizerState.DepthBias = (INT)desc.rasterizer.depthBiasConstant;
 		ci.RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-		ci.RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+		ci.RasterizerState.SlopeScaledDepthBias = desc.rasterizer.depthBiasSlope;
 		ci.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
 		ci.DepthStencilState.DepthEnable = desc.depth.depthTestEnable ? TRUE : FALSE;
@@ -534,6 +547,21 @@ namespace mv::backend::dx12_0
 		DxPipeline pipeline;
 		pipeline.initialize(device_, ci);
 		pipeline.setTopology(toDxTopology(desc.topology));
+
+		rhi::PipelineHandle handle = (rhi::PipelineHandle)pipelines_.size();
+		pipelines_.push_back(std::move(pipeline));
+
+		return handle;
+	}
+
+	rhi::PipelineHandle DxPipelineManager::createComputePipeline(const rhi::ComputePipelineDesc& desc)
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC ci{};
+		ci.pRootSignature = layouts_[desc.layoutHandle].rootSignature();
+		ci.CS = shaderManager_->shader(desc.cs).bytecode();
+
+		DxPipeline pipeline;
+		pipeline.initializeCompute(device_, ci);
 
 		rhi::PipelineHandle handle = (rhi::PipelineHandle)pipelines_.size();
 		pipelines_.push_back(std::move(pipeline));

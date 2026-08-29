@@ -60,6 +60,11 @@ namespace mv
 
 			eSampledImage,
 			eSampler,
+
+			// Shader-writable image. Addresses exactly one mip level: a UAV names a level,
+			// and Vulkan's storage image descriptor takes a view over a single one, so
+			// neither API has a notion of "writable chain".
+			eStorageImage,
 		};
 
 		enum class EPrimitiveTopology
@@ -175,6 +180,13 @@ namespace mv
 			EFrontFace frontFace = EFrontFace::eCounterClockwise;
 
 			bool depthClampEnable = false;
+
+			// Pushes generated depth away from the viewer. A shadow map is the reason this
+			// exists: without it a surface shadows itself wherever its own depth quantises
+			// to just less than the value it is compared against. The slope term scales with
+			// how steeply the surface recedes, which is where the error is largest.
+			f32 depthBiasConstant = 0.0f;
+			f32 depthBiasSlope = 0.0f;
 		};
 
 		// Vulkan addresses vertex inputs by location, HLSL by semantic name + index,
@@ -238,6 +250,15 @@ namespace mv
 			ETextureFormat depthFormat = ETextureFormat::eUndefined;
 		};
 
+		// A compute pipeline is a shader and a layout and nothing else: none of the fixed
+		// function state a graphics pipeline has to nail down applies.
+		struct ComputePipelineDesc
+		{
+			ShaderHandle cs = INVALID_HANDLE;
+
+			PipelineLayoutHandle layoutHandle = INVALID_HANDLE;
+		};
+
 		struct BindingDesc
 		{
 			u32 binding = 0;
@@ -284,6 +305,14 @@ namespace mv
 
 			// 1 disables anisotropic filtering. Only meaningful on a texture with mips.
 			u32 maxAnisotropy = 1;
+
+			// Turns the sampler into a comparison sampler: every tap is compared against a
+			// reference value and the filter averages the results rather than the depths.
+			// This is what makes a single shadow lookup return a filtered 2x2 rather than a
+			// hard in-or-out, and it is the only sampler kind a depth texture can be
+			// meaningfully filtered with.
+			bool compareEnable = false;
+			ECompareOp compareOp = ECompareOp::eLessEqual;
 		};
 
 		struct BufferBinding
@@ -331,6 +360,19 @@ namespace mv
 			u32 arrayIndex = 0;
 		};
 
+		// One writable mip of one texture.
+		struct StorageTextureBinding
+		{
+			u32 binding = 0;
+			TextureHandle texture = INVALID_HANDLE;
+
+			u32 arrayIndex = 0;
+
+			// Which level the shader writes. Unlike the sampled binding there is no range:
+			// a UAV covers a single level.
+			u32 mipLevel = 0;
+		};
+
 		struct BindGroupDesc
 		{
 			BindGroupLayoutHandle layout = INVALID_HANDLE;
@@ -338,6 +380,7 @@ namespace mv
 			std::vector<BufferBinding> uniformBuffers;
 			std::vector<StorageBufferBinding> storageBuffers;
 			std::vector<TextureBinding> sampledTextures;
+			std::vector<StorageTextureBinding> storageTextures;
 			std::vector<SamplerBinding> samplers;
 		};
 
@@ -362,6 +405,7 @@ namespace mv
 
 			virtual PipelineLayoutHandle createPipelineLayout(const PipelineLayoutDesc& desc) = 0;
 			virtual PipelineHandle createPipeline(const GraphicsPipelineDesc& desc) = 0;
+			virtual PipelineHandle createComputePipeline(const ComputePipelineDesc& desc) = 0;
 		};
 	}
 

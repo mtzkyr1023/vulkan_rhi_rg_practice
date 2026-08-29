@@ -15,6 +15,7 @@
 // Forward declared so cgltf stays an implementation detail of the .cpp.
 struct cgltf_image;
 struct cgltf_texture;
+struct cgltf_data;
 
 namespace mv
 {
@@ -61,6 +62,90 @@ namespace mv
 
 			u32 materialCount = 0;
 			u32 textureCount = 0;
+
+			// The merged vertices on the CPU side, kept only when the loader was asked to
+			// retain geometry -- for callers that need the shape itself, like a physics
+			// convex hull. Empty otherwise.
+			std::vector<ModelVertex> cpuVertices;
+		};
+
+		// --- skinned models --------------------------------------------------------
+
+		// Joint indices ride as floats on purpose: every backend's vertex fetch has
+		// eFloat4, small integers are exact in float, and the shader casts them back.
+		struct SkinnedVertex
+		{
+			f32 position[3];
+			f32 normal[3];
+			f32 uv[2];
+			f32 joints[4];
+			f32 weights[4];
+		};
+
+		enum class EAnimPath : u32
+		{
+			eTranslation,
+			eRotation,
+			eScale,
+		};
+
+		// One animated property of one joint: keyframe times and packed values
+		// (3 floats per key for T and S, 4 for R), linearly interpolated.
+		struct AnimChannel
+		{
+			u32 joint = 0;
+			EAnimPath path = EAnimPath::eTranslation;
+
+			std::vector<f32> times;
+			std::vector<f32> values;
+		};
+
+		struct AnimClip
+		{
+			std::string name;
+			f32 duration = 0.0f;
+
+			std::vector<AnimChannel> channels;
+		};
+
+		struct SkinnedJoint
+		{
+			// Index into SkinnedModel::joints, -1 for a root.
+			s32 parent = -1;
+
+			math::Mat4 inverseBind = math::Mat4::identity();
+
+			// The rest pose, used for every property no channel animates.
+			math::Vec3 baseTranslation{};
+			math::Quat baseRotation{};
+			math::Vec3 baseScale{ 1.0f, 1.0f, 1.0f };
+		};
+
+		// A model that deforms: mesh-space vertices with joint weights, a skeleton,
+		// and the clips that drive it. Unlike Model, nothing is baked into the
+		// vertices -- the skin owns placement, which is also why the visibility
+		// buffer never sees these: they take the forward prop path.
+		struct SkinnedModel
+		{
+			rhi::BufferHandle vertexBuffer = INVALID_HANDLE;
+			rhi::BufferHandle indexBuffer = INVALID_HANDLE;
+
+			u32 vertexCount = 0;
+			u32 indexCount = 0;
+
+			std::vector<ModelPrimitive> primitives;
+
+			// Rest-pose bounds in mesh space.
+			math::Vec3 boundsMin{};
+			math::Vec3 boundsMax{};
+
+			std::vector<SkinnedJoint> joints;
+
+			// Joint indices ordered parents-before-children: glTF's joint array makes
+			// no such promise, and global transforms need it.
+			std::vector<u32> jointOrder;
+
+			std::vector<AnimClip> clips;
 		};
 
 		// The decoded pixels of one texture, mip 0 first. Kept only when the caller asks
@@ -95,9 +180,21 @@ namespace mv
 				const std::string& path,
 				Model& outModel);
 
+			// Loads a model with a skin: raw mesh-space vertices with joint weights,
+			// the skeleton, and every animation clip. Materials register exactly as
+			// load()'s do.
+			bool loadSkinned(
+				const std::shared_ptr<rhi::IRHI>& rhi,
+				material::MaterialSystem& materialSystem,
+				const std::string& path,
+				SkinnedModel& outModel);
+
 			// Must be set before load(). Costs the full decoded size of every texture in
 			// RAM, so it is opt-in.
 			void setRetainSources(bool retain) { retainSources_ = retain; }
+
+			// Keep the merged vertex array in Model::cpuVertices after upload.
+			void setRetainGeometry(bool retain) { retainGeometry_ = retain; }
 
 			const std::vector<TextureSource>& textureSources() const { return textureSources_; }
 
@@ -116,8 +213,19 @@ namespace mv
 				const std::string& baseDirectory,
 				std::unordered_map<const cgltf_image*, rhi::TextureHandle>& cache);
 
+			// The material block both load paths share. Appends one handle per glTF
+			// material plus a default at the end, and returns that default's index.
+			u32 registerMaterials(
+				const std::shared_ptr<rhi::IRHI>& rhi,
+				material::MaterialSystem& materialSystem,
+				const cgltf_data* data,
+				const std::string& baseDirectory,
+				std::vector<material::MaterialHandle>& outMaterials,
+				u32& outTextureCount);
+
 		private:
 			bool retainSources_ = false;
+			bool retainGeometry_ = false;
 
 			std::vector<TextureSource> textureSources_;
 		};

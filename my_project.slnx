@@ -5,7 +5,12 @@
   </Configurations>
   <Project Path="mv_RendererBackend/mv_RendererBackend.vcxproj" Id="5d1c79cc-d567-44ce-b823-f114ad322f5c" />
   <Project Path="mv_RendererCore/mv_RendererCore.vcxproj" Id="be42973c-83ff-4812-8d86-8ca0a127b16d" />
+  <Project Path="thirdparty/bullet3/mv_Bullet.vcxproj" Id="7b6f0a9c-2d84-4c11-b7e2-91d54f30a6e8" />
+  <Project Path="mv_GameCore/mv_GameCore.vcxproj" Id="e3a9c65d-4b21-47f8-9d43-2f8a10b6c790">
+    <BuildDependency Project="thirdparty/bullet3/mv_Bullet.vcxproj" />
+  </Project>
   <Project Path="proj001/proj001.vcxproj" Id="bfc56906-a12c-4894-820b-d07ab444fe45">
     <BuildDependency Project="mv_RendererCore/mv_RendererCore.vcxproj" />
+    <BuildDependency Project="mv_GameCore/mv_GameCore.vcxproj" />
   </Project>
 </Solution>

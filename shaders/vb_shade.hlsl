@@ -148,7 +148,31 @@ float textureLod(uint textureIndex, float2 uvDdx, float2 uvDdy)
 	return 0.5f * log2(max(dot(dx, dx), dot(dy, dy)));
 }
 
-float4 PSMain(VSOutput input) : SV_TARGET
+// Two targets: the shaded colour, and where this pixel was on screen last frame.
+//
+// Velocity could be derived from depth alone while every mesh is static, which is what
+// the temporal pass used to do. Writing it out instead moves the question from "where was
+// this point in space" to "where was this surface", which is the only form that survives
+// anything animated: a skinned or moving mesh occupies a world position this frame that
+// belonged to something else in the last one.
+struct ShadeOutput
+{
+	float4 color    : SV_TARGET0;
+	float2 velocity : SV_TARGET1;
+};
+
+static float2 gVelocity;
+
+ShadeOutput makeOutput(float4 color)
+{
+	ShadeOutput output;
+	output.color = color;
+	output.velocity = gVelocity;
+
+	return output;
+}
+
+ShadeOutput PSMain(VSOutput input)
 {
 	int2 pixel = int2(input.position.xy);
 	uint2 packed = visibility.Load(int3(pixel, 0));
@@ -202,10 +226,19 @@ float4 PSMain(VSOutput input) : SV_TARGET
 	surface.positionDdx = float3(px.y, py.y, pz.y);
 	surface.positionDdy = float3(px.z, py.z, pz.z);
 
+	// Set once, for every path out of this shader including the debug views, so the
+	// temporal pass sees a complete velocity buffer whatever is being displayed.
+	gVelocity = computeVelocity(surface.worldPosition, input.position.xy / winSize);
+
 	// Report the mip this pixel would like for its base colour map. InterlockedMin keeps
 	// the finest request across every pixel that touched the texture this frame.
 	{
-		float lod = textureLod(surface.material.baseColorTexture, surface.uvDdx, surface.uvDdy);
+		// GetDimensions reports the size of the view's own level 0, so a texture whose
+		// finest levels are not resident reports a level relative to what it does have.
+		// Adding the base mip back makes the request absolute, which is the only form a
+		// streaming system can act on: it has to know which level to fetch, not how many
+		// more it would like than it was given.
+		float lod = textureLod(surface.material.baseColorTexture, surface.uvDdx, surface.uvDdy) + forcedBaseMip;
 
 		uint previous;
 		InterlockedMin(textureFeedback[surface.material.baseColorTexture], (uint)clamp(lod, 0.0f, 15.0f), previous);
@@ -216,28 +249,28 @@ float4 PSMain(VSOutput input) : SV_TARGET
 	switch (debugMode)
 	{
 	case MV_DEBUG_DRAW_ID:
-		return float4(debugIdColor(drawIndex), 1.0f);
+		return makeOutput(float4(debugIdColor(drawIndex), 1.0f));
 
 	case MV_DEBUG_PRIMITIVE_ID:
-		return float4(debugIdColor(primitiveID), 1.0f);
+		return makeOutput(float4(debugIdColor(primitiveID), 1.0f));
 
 	case MV_DEBUG_MATERIAL_ID:
-		return float4(debugIdColor(draw.materialIndex), 1.0f);
+		return makeOutput(float4(debugIdColor(draw.materialIndex), 1.0f));
 
 	// Should read as a smooth red/green/blue gradient across every triangle. Banding or
 	// discontinuities inside a triangle mean the reconstruction is wrong.
 	case MV_DEBUG_BARYCENTRIC:
-		return float4(bary.lambda, 1.0f);
+		return makeOutput(float4(bary.lambda, 1.0f));
 
 	case MV_DEBUG_UV:
-		return float4(frac(surface.uv), 0.0f, 1.0f);
+		return makeOutput(float4(frac(surface.uv), 0.0f, 1.0f));
 
 	case MV_DEBUG_NORMAL:
-		return float4(normalize(surface.geometricNormal) * 0.5f + 0.5f, 1.0f);
+		return makeOutput(float4(normalize(surface.geometricNormal) * 0.5f + 0.5f, 1.0f));
 
 	// Checks the analytic gradients: without them every surface would show level 0.
 	case MV_DEBUG_MIP_LEVEL:
-		return float4(mipLevelColor(textureLod(surface.material.baseColorTexture, surface.uvDdx, surface.uvDdy)), 1.0f);
+		return makeOutput(float4(mipLevelColor(textureLod(surface.material.baseColorTexture, surface.uvDdx, surface.uvDdy)), 1.0f));
 
 	// Which virtual page each pixel resolves to. Should read as a grid that stays glued to
 	// the surface, and the cells should quadruple in size at every level boundary.
@@ -248,9 +281,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
 		// Black where the sample fell through to the source texture instead.
 		if (level == 0xFFFFFFFFu)
-			return float4(0.0f, 0.0f, 0.0f, 1.0f);
+			return makeOutput(float4(0.0f, 0.0f, 0.0f, 1.0f));
 
-		return float4(debugIdColor(page.x * 71u + page.y * 3u + level * 7919u), 1.0f);
+		return makeOutput(float4(debugIdColor(page.x * 71u + page.y * 3u + level * 7919u), 1.0f));
 	}
 
 	// The virtualised level actually used, in the same palette as the mip view, so the two
@@ -261,10 +294,15 @@ float4 PSMain(VSOutput input) : SV_TARGET
 		virtualDebugPage(surface.material.baseColorTexture, surface.uv, surface.uvDdx, surface.uvDdy, level);
 
 		if (level == 0xFFFFFFFFu)
-			return float4(0.0f, 0.0f, 0.0f, 1.0f);
+			return makeOutput(float4(0.0f, 0.0f, 0.0f, 1.0f));
 
-		return float4(mipLevelColor((float)level), 1.0f);
+		return makeOutput(float4(mipLevelColor((float)level), 1.0f));
 	}
+
+	// Which cascade each pixel falls into. The bands should sit at increasing distances
+	// and stay put as the camera moves, not swim about.
+	case MV_DEBUG_CASCADE:
+		return makeOutput(float4(cascadeDebugColor(surface.worldPosition), 1.0f));
 
 	default:
 		break;
@@ -272,5 +310,5 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
 	float4 baseColor = sampleBaseColor(surface);
 
-	return shadeSurface(surface, baseColor);
+	return makeOutput(shadeSurface(surface, baseColor));
 }

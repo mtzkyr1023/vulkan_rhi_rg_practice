@@ -30,7 +30,11 @@ namespace mv
 			TextureHandle texture = INVALID_HANDLE;
 
 			bool clear = true;
-			f32 clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+			// Zero throughout, matching the value a texture is created with. D3D12 keeps one
+			// optimised clear value per resource and takes a slower path for any other, so
+			// the default is the one that stays on the fast path.
+			f32 clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		};
 
 		struct RenderPassDepthTarget

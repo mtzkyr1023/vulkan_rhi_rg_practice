@@ -26,6 +26,9 @@ namespace mv
 				void initialize(DxDevice* device, void* hwnd);
 				void deinitialize();
 
+				// Reallocates the buffers at a new size, keeping the chain otherwise as it is.
+				void resize(u32 width, u32 height);
+
 				void present(ID3D12CommandQueue* queue);
 
 				// DXGI decides which buffer is next after each Present (and FLIP_DISCARD does not

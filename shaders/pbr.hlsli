@@ -14,6 +14,8 @@
 #define _MV_PBR_HLSLI_
 
 #include "vt.hlsli"
+#include "shadow.hlsli"
+#include "ibl.hlsli"
 
 static const float PI = 3.14159265359f;
 
@@ -172,14 +174,31 @@ float4 shadeSurface(SurfaceInput surface, float4 baseColor)
 
 	float3 direct = (diffuse + specular) * lightColor * NdotL;
 
-	// Stand-in for image based lighting: a constant environment split between a diffuse
-	// and a specular lobe by the same Fresnel term.
-	float3 ambientF = fresnelSchlickRoughness(NdotV, F0, roughness);
-	float3 ambient = (diffuseColor * (1.0f - ambientF) + ambientF * 0.5f) * ambientIntensity * occlusion;
+	// Only the direct term is occluded. The ambient stand-in represents light arriving from
+	// every direction, which a single directional shadow says nothing about.
+	//
+	// The bias is applied against the geometric normal rather than the mapped one: the depth
+	// in the shadow map came from the real triangle, so that is the surface the offset has
+	// to escape.
+	direct *= shadowFactor(surface.worldPosition, geometricNormal, NdotL);
+
+	// And the clouds, which occlude the same term for the same reason. Multiplied rather
+	// than combined with a min: a point under both a hill and a cloud is darker than under
+	// either, and two independent occluders multiply.
+	direct *= cloudShadowFactor(surface.worldPosition);
+
+	// Image based lighting: diffuse irradiance reconstructed from nine coefficients, and
+	// specular from the roughness-prefiltered sky. This replaces the constant ambient that
+	// stood in for it, so a surface facing the sky is now brighter than one facing the
+	// ground rather than both receiving the same grey.
+	float3 ambient = evaluateIBL(N, V, F0, diffuseColor, roughness, occlusion);
 
 	float3 color = direct * occlusion + ambient + emissive;
 
-	return float4(linearToSrgb(tonemapACES(color)), baseColor.a);
+	// Linear radiance, not a display value. Tone mapping and the sRGB encode are the last
+	// step of the post-process chain now, which is what lets everything in between work in
+	// the range the lighting actually produced.
+	return float4(color, baseColor.a);
 }
 
 #endif

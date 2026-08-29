@@ -31,6 +31,12 @@ namespace mv
 				VkImageView view = VK_NULL_HANDLE;
 				Allocation alloc;
 
+				// The layout the image was last transitioned to. Vulkan offers no way to ask,
+				// and a barrier naming the wrong source layout is undefined, so the backend
+				// keeps its own record for callers that cannot know -- a texture written by
+				// compute before it has ever been uploaded has no state its owner could name.
+				VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
 				bool imported = false;
 			};
 		}

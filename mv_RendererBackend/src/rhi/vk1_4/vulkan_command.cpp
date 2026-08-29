@@ -23,6 +23,7 @@ namespace mv::backend::vk1_4
 		case rhi::EResourceState::eRenderTarget: return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 		case rhi::EResourceState::eDepthStencilWrite: return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
 		case rhi::EResourceState::eDepthStencilRead: return VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+		case rhi::EResourceState::eIndirectArgument: return VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
 		case rhi::EResourceState::ePresent: return VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 		default:
 			return 0;
@@ -45,6 +46,7 @@ namespace mv::backend::vk1_4
 		case rhi::EResourceState::eRenderTarget: return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 		case rhi::EResourceState::eDepthStencilWrite: return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		case rhi::EResourceState::eDepthStencilRead: return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+		case rhi::EResourceState::eIndirectArgument: return VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
 		case rhi::EResourceState::ePresent: return VK_ACCESS_MEMORY_READ_BIT;
 		default:
 			return 0;
@@ -97,7 +99,10 @@ namespace mv::backend::vk1_4
 	void VulkanCommandBuffer::begin()
 	{
 		VkCommandBufferBeginInfo bi{};
+		bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		vkBeginCommandBuffer(commandBuffer_, &bi);
+
+		computeBindPoint_ = false;
 	}
 
 	void VulkanCommandBuffer::end()
@@ -145,11 +150,24 @@ namespace mv::backend::vk1_4
 		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		barrier.image = image.image;
-		barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // ToDo: Support different aspect masks
+
+		// A depth image must be transitioned through its depth aspect; naming the colour
+		// aspect of one is invalid. Stencil has to come along when the format carries it,
+		// because a transition has to cover every aspect the image has.
+		const bool isDepth =
+			(image.desc.usage & rhi::ETextureUsage::eDepthStencilAttachment) == rhi::ETextureUsage::eDepthStencilAttachment;
+		const bool hasStencil = (image.desc.format == rhi::ETextureFormat::eD24_UNORM_S8_UINT);
+
+		barrier.subresourceRange.aspectMask = isDepth
+			? (VK_IMAGE_ASPECT_DEPTH_BIT | (hasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0))
+			: VK_IMAGE_ASPECT_COLOR_BIT;
+
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = 1; // ToDo: Support different mip levels
+		// The whole chain: a transition that left the smaller levels behind would leave a
+		// sampled texture half in the wrong layout.
+		barrier.subresourceRange.levelCount = image.desc.mipLevels ? image.desc.mipLevels : 1;
 		barrier.subresourceRange.baseArrayLayer = 0;
-		barrier.subresourceRange.layerCount = 1; // ToDo: Support different array layers
+		barrier.subresourceRange.layerCount = image.desc.arrayLayers ? image.desc.arrayLayers : 1;
 		vkCmdPipelineBarrier(
 			commandBuffer_,
 			before.stage,
